@@ -162,3 +162,26 @@ O app foi organizado para essa atualização ser rápida. Tudo o que muda de ano
 
 **Não precisa mexer em:** `manifest.json`, `sw.js` ou `firestore.rules` — nenhum desses depende do ano.
 
+---
+
+## 11. Segurança — o que foi revisado
+
+O app foi revisado e alguns pontos foram corrigidos diretamente no código. Resumo:
+
+### Corrigido no código
+- **Vazamento por trás da tela de senha (corrigido):** antes, a tela de senha só *escondia visualmente* o app (`display:none`) — mas os dados (notas, planilhas) já eram carregados e escritos no HTML da página em segundo plano, então dava pra ver tudo sem digitar a senha, só abrindo o **Inspecionar elemento** do navegador. Agora o carregamento e a exibição desses dados só acontecem depois que a senha certa é digitada.
+- **Nomes de arquivo sem escape (corrigido):** a lista de planilhas de Repercussão agora trata o nome do arquivo com segurança antes de exibir, evitando que um nome de arquivo malicioso injete código na página.
+- **Biblioteca de ícones sem versão fixa (corrigido):** o `lucide@latest` foi trocado por uma versão fixa (`lucide@0.469.0`), pra evitar que uma atualização não testada da biblioteca quebre o app de uma hora pra outra.
+- **Botões "Sair" ambíguos (corrigido):** agora o cadeado no cabeçalho diz "Travar o app", e o botão ao lado do e-mail sincronizado diz "Sair da conta" — antes os dois se chamavam só "Sair" e podiam confundir.
+
+### Já estava OK
+- **Regras do Firestore** (`firestore.rules`): cada pessoa só lê/escreve os próprios dados (`request.auth.uid == userId`). Isso já garante que ninguém acessa notas ou planilhas de outra conta pelo banco de dados.
+- O texto das notas já era exibido com escape (protegido contra injeção de código).
+
+### Limitações que continuam existindo (importante saber)
+- **A senha do app ("Paulus") não é uma segurança real, é só uma trava simples.** Ela fica escrita no código-fonte do site — qualquer pessoa com conhecimento técnico básico (abrir o "Ver código-fonte" ou o Console do navegador) consegue lê-la ou contornar a tela. Ela serve para afastar acesso casual (alguém que ache o link por acaso), não para proteger contra alguém com esse tipo de conhecimento.
+- **O botão de cadeado ("Travar app") não desconecta da conta na nuvem.** Ele só volta a pedir a senha do app; se alguém contornar a tela de senha num aparelho onde você já sincronizou notas, ainda seria possível ver os dados da conta que já estava logada ali. Se for usar o app num aparelho compartilhado, use também "Sair da conta" (perto do e-mail, no cabeçalho) além de travar.
+- **A `apiKey` do Firebase aparece no código do site.** Isso é normal e esperado para apps desse tipo (não é uma senha secreta) — a proteção de verdade é feita pelas regras do Firestore e pela autenticação, que já estão corretas. Mesmo assim, para reforçar, você pode:
+  1. No **Google Cloud Console** (console.cloud.google.com) → **APIs e Serviços > Credenciais**, abrir essa chave de API e restringir "Restrições de aplicativo" para aceitar apenas o domínio do seu GitHub Pages (`https://SEU-USUARIO.github.io/*`). Isso impede que alguém copie sua chave e a use em outro site.
+  2. Ativar **2 fatores (2FA)** na conta Google usada no Firebase — essa conta é o verdadeiro "cofre" de tudo: quem tiver acesso a ela, acessa o console e os dados de todo mundo que sincronizou.
+- **Como as notas podem conter dados sensíveis de famílias atendidas**, vale reforçar: não compartilhe a senha do app nem as credenciais da sua conta de sincronização com ninguém, e sempre use "Sair da conta" ao terminar de usar num computador que não é só seu (biblioteca, órgão público etc.).
