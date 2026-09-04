@@ -17,7 +17,7 @@
 // (trocou ícones, nomes de arquivo etc.), só mudar o número da versão
 // abaixo (v3 -> v4...). Para atualizações normais de conteúdo do
 // index.html isso NÃO é necessário.
-const CACHE_NAME = "pbf-app-shell-v3";
+const CACHE_NAME = "pbf-app-shell-v4";
 
 // Arquivos do próprio site.
 const SHELL_FILES = [
@@ -34,7 +34,7 @@ const EXTERNAL_FILES = [
   "https://cdn.tailwindcss.com",
   "https://unpkg.com/lucide@0.469.0",
   "https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js",
-  "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700;800&display=swap"
+  "https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;0,600;0,700;1,600&family=Inter:wght@400;500;600;700;800&display=swap"
 ];
 
 // Hosts externos que podem ser guardados em cache normalmente (bibliotecas
