@@ -818,10 +818,15 @@
     }
     if (!header || !dataRows.length) throw new Error('Não encontrei dados na tabela enviada.');
 
-    // Descobre qual coluna tem o nome da família/responsável para ordenar de A a Z.
+    // Descobre qual coluna tem o NOME da família/responsável para ordenar de A a Z.
+    // Importante: procurar "nome" PRIMEIRO — senão colunas como "NIS do
+    // Responsável Familiar" (que também contém "responsável"+"familiar",
+    // mas é um número, não um nome) acabam sendo escolhidas por engano.
     const headerNorm = header.map(v => normalizeText(v));
-    let nameIdx = headerNorm.findIndex(h => h.includes('responsavel') && h.includes('familiar'));
+    let nameIdx = headerNorm.findIndex(h => h === 'nome do responsavel familiar');
+    if (nameIdx < 0) nameIdx = headerNorm.findIndex(h => h.includes('nome') && h.includes('responsavel'));
     if (nameIdx < 0) nameIdx = headerNorm.findIndex(h => h.includes('nome'));
+    if (nameIdx < 0) nameIdx = headerNorm.findIndex(h => h.includes('responsavel') && h.includes('familiar'));
     if (nameIdx < 0) nameIdx = 0;
 
     const sorted = [...dataRows].sort((a,b) =>
@@ -859,31 +864,57 @@
     });
 
     const bordaLeve = {
-      top:{style:'thin',color:{rgb:'D9E2F3'}}, bottom:{style:'thin',color:{rgb:'D9E2F3'}},
-      left:{style:'thin',color:{rgb:'D9E2F3'}}, right:{style:'thin',color:{rgb:'D9E2F3'}}
+      top:{style:'thin',color:{rgb:'D9D9D9'}}, bottom:{style:'thin',color:{rgb:'D9D9D9'}},
+      left:{style:'thin',color:{rgb:'D9D9D9'}}, right:{style:'thin',color:{rgb:'D9D9D9'}}
     };
-    const estiloCelula = { font:{name:'Arial',sz:12,color:{rgb:'1F2937'}}, alignment:{vertical:'center',wrapText:true}, border:bordaLeve };
-    const estiloCelulaAlternada = { ...estiloCelula, fill:{patternType:'solid',fgColor:{rgb:'F3F6FA'}} };
+    // Clareia uma cor hex misturando com branco (factor 0=cor original, 1=branco).
+    const clarear = (hex, factor) => {
+      const r = parseInt(hex.slice(0,2),16), g = parseInt(hex.slice(2,4),16), b = parseInt(hex.slice(4,6),16);
+      const mix = (v) => Math.round(v + (255 - v) * factor).toString(16).padStart(2,'0').toUpperCase();
+      return mix(r) + mix(g) + mix(b);
+    };
     const corPorAba = name => (profissionais.find(p => p.sheetName === name) || {}).cor || '0B2F7A';
 
     out.SheetNames.forEach(name => {
       const ws = out.Sheets[name];
       const range = XLSX.utils.decode_range(ws['!ref']);
       const corAba = corPorAba(name);
+      const zebraClara = clarear(corAba, 0.90);   // tom bem claro da cor da aba
+      const zebraEscura = clarear(corAba, 0.96);  // quase branco, mesma família de cor
+
       const estiloCabecalho = {
-        font:{name:'Arial',sz:12,bold:true,color:{rgb:'FFFFFF'}},
-        fill:{patternType:'solid',fgColor:{rgb:corAba}},
-        alignment:{horizontal:'center',vertical:'center',wrapText:true},
-        border:bordaLeve
+        font:{name:'Arial', sz:13, bold:true, color:{rgb:'FFFFFF'}},
+        fill:{patternType:'solid', fgColor:{rgb:corAba}},
+        alignment:{horizontal:'center', vertical:'center', wrapText:true},
+        border:{ top:{style:'thin',color:{rgb:corAba}}, bottom:{style:'medium',color:{rgb:corAba}},
+                 left:{style:'thin',color:{rgb:corAba}}, right:{style:'thin',color:{rgb:corAba}} }
       };
-      ws['!tabColor'] = corAba;
+      const estiloCelula = { font:{name:'Arial', sz:12, color:{rgb:'1F2937'}}, alignment:{vertical:'center', wrapText:true}, border:bordaLeve };
+      const estiloCelulaAlternada = { ...estiloCelula, fill:{patternType:'solid', fgColor:{rgb:zebraClara}} };
+      const estiloCelulaBase = { ...estiloCelula, fill:{patternType:'solid', fgColor:{rgb:zebraEscura}} };
+      const estiloNome = negrito => ({
+        font:{name:'Arial', sz:12, bold:true, color:{rgb:corAba}},
+        alignment:{vertical:'center', wrapText:true},
+        border:bordaLeve,
+        fill:{patternType:'solid', fgColor:{rgb:negrito}}
+      });
+
+      ws['!tabColor'] = { rgb: corAba };
       ws['!rows'] = [];
       for (let r = range.s.r; r <= range.e.r; r++) {
-        ws['!rows'][r] = { hpt: r === range.s.r ? 46 : 32 };
+        ws['!rows'][r] = { hpt: r === range.s.r ? 50 : 34 };
+        const linhaClara = r % 2 === 0;
         for (let c = range.s.c; c <= range.e.c; c++) {
           const address = XLSX.utils.encode_cell({r,c});
           if (!ws[address]) ws[address] = { v:'', t:'s' };
-          ws[address].s = r === range.s.r ? estiloCabecalho : (r % 2 === 0 ? estiloCelulaAlternada : estiloCelula);
+          if (r === range.s.r) {
+            ws[address].s = estiloCabecalho;
+          } else if (c === nameIdx) {
+            // Coluna do nome do responsável familiar em destaque (negrito, cor da aba).
+            ws[address].s = estiloNome(linhaClara ? zebraClara : zebraEscura);
+          } else {
+            ws[address].s = linhaClara ? estiloCelulaAlternada : estiloCelulaBase;
+          }
         }
       }
       ws['!autofilter'] = { ref: ws['!ref'] };
@@ -896,7 +927,7 @@
           const value = cell && cell.v != null ? String(cell.v) : '';
           max = Math.max(max, value.length);
         }
-        ws['!cols'][c] = { wch: Math.min(max + 4, 42) };
+        ws['!cols'][c] = { wch: Math.min(max + 4, c === nameIdx ? 34 : 42) };
       }
       ws['!margins'] = { left:0.25, right:0.25, top:0.5, bottom:0.5, header:0.2, footer:0.2 };
     });
