@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon-192.png">
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://unpkg.com/lucide@0.469.0"></script>
 <script src="https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -75,7 +75,7 @@
     </div>
     <div class="flex items-center gap-2">
       <div id="authArea" class="text-right text-xs"></div>
-      <button onclick="sairDoApp()" title="Sair (travar o app e pedir a senha de novo)"
+      <button onclick="sairDoApp()" title="Travar o app (pedir a senha de novo)"
         class="bg-white/10 hover:bg-white/20 p-2 rounded-xl transition">
         <i data-lucide="lock" class="w-4 h-4"></i>
       </button>
@@ -772,7 +772,7 @@
     const fileFilterEl = document.getElementById('reportFileFilter');
     if (fileFilterEl) {
       const previous = fileFilterEl.value;
-      fileFilterEl.innerHTML = '<option value="">Escolha uma planilha</option>' + reports.map(r => `<option value="${r.id}">${MESES_NOMES[r.mes] || '?'} / ${r.ano} — ${r.filename || 'arquivo'}</option>`).join('');
+      fileFilterEl.innerHTML = '<option value="">Escolha uma planilha</option>' + reports.map(r => `<option value="${r.id}">${escapeHtml(MESES_NOMES[r.mes] || '?')} / ${r.ano} — ${escapeHtml(r.filename || 'arquivo')}</option>`).join('');
       if (reports.some(r => r.id === previous)) fileFilterEl.value = previous;
     }
 
@@ -783,8 +783,8 @@
     wrap.innerHTML = filtered.map(r => `
       <div class="flex items-center justify-between gap-2 border border-slate-200 rounded-xl px-3 py-2">
         <div class="min-w-0">
-          <p class="text-xs font-bold truncate">${MESES_NOMES[r.mes] || '?'} / ${r.ano}</p>
-          <p class="text-[10px] text-slate-400 truncate">${r.filename || ''} · ${r.sizeKB || 0} KB</p>
+          <p class="text-xs font-bold truncate">${escapeHtml(MESES_NOMES[r.mes] || '?')} / ${r.ano}</p>
+          <p class="text-[10px] text-slate-400 truncate">${escapeHtml(r.filename || '')} · ${r.sizeKB || 0} KB</p>
         </div>
         <div class="flex items-center gap-1 shrink-0">
           <button onclick="__downloadReport('${r.id}')" title="Baixar" class="p-1.5 rounded-lg hover:bg-slate-100"><i data-lucide="download" class="w-4 h-4" style="color:var(--azul)"></i></button>
@@ -803,13 +803,19 @@
     }
   };
 
-  onAuthStateChanged(auth, async (user) => {
+  // As funções abaixo só populam a tela com dados reais (notas, nome do
+  // e-mail sincronizado, planilhas de repercussão) DEPOIS que o app estiver
+  // destravado pela tela de senha. Antes disso, o Firebase pode resolver a
+  // sessão em segundo plano, mas guardamos o resultado em "pendência" sem
+  // tocar no HTML — assim, quem inspecionar a página antes de digitar a
+  // senha não encontra nada de verdade escondido no código.
+  async function runAuthUI(user) {
     currentUser = user;
     if (user) {
       authArea.innerHTML = `
         <div class="flex items-center gap-2 justify-end">
           <span class="hidden sm:inline text-blue-100">${user.email}</span>
-          <button onclick="doLogout()" class="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg font-semibold">Sair</button>
+          <button onclick="doLogout()" class="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg font-semibold">Sair da conta</button>
         </div>
         <p class="text-[10px] text-blue-200 mt-1 flex items-center gap-1 justify-end"><span>●</span> sincronizado na nuvem</p>`;
       await loadNotesFromCloud();
@@ -819,6 +825,18 @@
       authArea.innerHTML = `<button onclick="openAuthModal()" class="bg-white text-blue-900 px-3 py-1.5 rounded-lg font-bold hover:opacity-90">Sincronizar notas</button>`;
       render();
       await loadReports();
+    }
+  }
+  // Exposto para a tela de senha poder chamar isso assim que for destravada.
+  window.__pbfRunAuthUI = runAuthUI;
+
+  onAuthStateChanged(auth, async (user) => {
+    if (window.__pbfUnlocked) {
+      await runAuthUI(user);
+    } else {
+      // App ainda travado: guarda o resultado sem exibir nada.
+      window.__pbfPendingAuthUser = user;
+      window.__pbfHasPendingAuth = true;
     }
   });
 
@@ -1270,7 +1288,11 @@ if ('serviceWorker' in navigator) {
     const SENHA_CORRETA = "Paulus";
     const CHAVE_LOCAL = "pbf_desbloqueado";
 
-    // Botão "Sair" no cabeçalho chama esta função: trava o app de novo,
+    // Sinaliza pro script do Firebase (que carrega depois) se o app já
+    // pode ou não exibir/buscar dados reais (notas, planilhas etc.).
+    window.__pbfUnlocked = false;
+
+    // Botão de cadeado no cabeçalho chama esta função: trava o app de novo,
     // exigindo a senha na próxima vez (e também agora, na hora).
     window.sairDoApp = function () {
       localStorage.removeItem(CHAVE_LOCAL);
@@ -1286,6 +1308,14 @@ if ('serviceWorker' in navigator) {
     function liberarApp() {
       lockScreen.style.display = 'none';
       appContent.style.display = '';
+      window.__pbfUnlocked = true;
+      // Se o Firebase já tinha resolvido a sessão em segundo plano enquanto
+      // a tela de senha estava aberta, só agora mandamos ele exibir e
+      // buscar os dados de verdade.
+      if (window.__pbfHasPendingAuth && window.__pbfRunAuthUI) {
+        window.__pbfHasPendingAuth = false;
+        window.__pbfRunAuthUI(window.__pbfPendingAuthUser);
+      }
       if (window.lucide) lucide.createIcons();
     }
 
