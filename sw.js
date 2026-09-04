@@ -32,7 +32,7 @@ const SHELL_FILES = [
 // ícones ou a exportação de PDF quando está offline.
 const EXTERNAL_FILES = [
   "https://cdn.tailwindcss.com",
-  "https://unpkg.com/lucide@latest",
+  "https://unpkg.com/lucide@0.469.0",
   "https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js",
   "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700;800&display=swap"
 ];
