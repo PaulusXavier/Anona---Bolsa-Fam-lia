@@ -892,11 +892,11 @@
       const estiloCelula = { font:{name:'Arial', sz:12, color:{rgb:'1F2937'}}, alignment:{vertical:'center', wrapText:true}, border:bordaLeve };
       const estiloCelulaAlternada = { ...estiloCelula, fill:{patternType:'solid', fgColor:{rgb:zebraClara}} };
       const estiloCelulaBase = { ...estiloCelula, fill:{patternType:'solid', fgColor:{rgb:zebraEscura}} };
-      const estiloNome = negrito => ({
-        font:{name:'Arial', sz:12, bold:true, color:{rgb:corAba}},
+      const estiloNome = fundo => ({
+        font:{name:'Arial', sz:12, bold:true, color:{rgb:'1F2937'}},
         alignment:{vertical:'center', wrapText:true},
         border:bordaLeve,
-        fill:{patternType:'solid', fgColor:{rgb:negrito}}
+        fill:{patternType:'solid', fgColor:{rgb:fundo}}
       });
 
       ws['!tabColor'] = { rgb: corAba };
