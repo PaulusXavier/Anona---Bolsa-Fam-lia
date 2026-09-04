@@ -203,6 +203,18 @@
     </div>
 
     <div class="panel-tool p-5">
+      <h2 class="eyebrow mb-3">
+        <span class="chip"><i data-lucide="users" class="w-4 h-4" style="color:var(--azul)"></i></span> Território Volante — Divisão por técnico
+      </h2>
+      <p class="text-xs text-slate-500 mb-3">Envie aqui a tabela de condicionalidades só do Território Volante. O app ordena as famílias de A a Z e divide em três partes iguais: a primeira parte para o <strong>Paulo Xavier</strong>, a segunda para o <strong>Danilo Braga</strong> e a terceira para a <strong>Keomara Teles</strong>.</p>
+      <label class="w-full flex items-center justify-center gap-2 border-2 border-dashed rounded-xl py-3 text-xs font-bold cursor-pointer hover:bg-slate-50" style="border-color:var(--azul); color:var(--azul)">
+        <i data-lucide="upload" class="w-4 h-4"></i> Enviar tabela (.xlsx)
+        <input type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="__handleVolanteUpload(this)">
+      </label>
+      <p class="text-[10px] text-slate-400 mt-2">Gera e baixa na hora uma planilha com 3 abas: <strong>Paulo Xavier</strong> (Psicólogo), <strong>Danilo Braga</strong> (Psicólogo) e <strong>Keomara Teles</strong> (Assistente Social) — nada é guardado na nuvem, o arquivo original não é alterado.</p>
+    </div>
+
+    <div class="panel-tool p-5">
       <h2 class="eyebrow mb-4">
         <span class="chip"><i data-lucide="info" class="w-4 h-4" style="color:var(--azul)"></i></span> Destaques do mês
       </h2>
@@ -786,6 +798,142 @@
     let binary=''; const chunk=0x8000;
     for(let i=0;i<bytes.length;i+=chunk) binary+=String.fromCharCode(...bytes.slice(i,i+chunk));
     return btoa(binary);
+  };
+
+  // Divide uma tabela de condicionalidades só do Território Volante em três
+  // partes iguais, respeitando a ordem alfabética (A a Z), e monta uma
+  // planilha nova com uma aba por técnico: 1ª parte = Paulo Xavier,
+  // 2ª parte = Danilo Braga, 3ª parte = Keomara Teles.
+  function makeVolanteDivisaoWorkbook(base64) {
+    const wb = XLSX.read(bytesFromBase64(base64), {type:'array'});
+    let header = null;
+    let dataRows = [];
+    for (const sheetName of wb.SheetNames) {
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, defval:''})
+        .filter(row => row.some(v => String(v).trim() !== ''));
+      if (!rows.length) continue;
+      header = rows[0];
+      dataRows = rows.slice(1);
+      break;
+    }
+    if (!header || !dataRows.length) throw new Error('Não encontrei dados na tabela enviada.');
+
+    // Descobre qual coluna tem o nome da família/responsável para ordenar de A a Z.
+    const headerNorm = header.map(v => normalizeText(v));
+    let nameIdx = headerNorm.findIndex(h => h.includes('responsavel') && h.includes('familiar'));
+    if (nameIdx < 0) nameIdx = headerNorm.findIndex(h => h.includes('nome'));
+    if (nameIdx < 0) nameIdx = 0;
+
+    const sorted = [...dataRows].sort((a,b) =>
+      String(a[nameIdx] || '').trim().localeCompare(String(b[nameIdx] || '').trim(), 'pt-BR', {sensitivity:'base'})
+    );
+
+    // Três partes o mais iguais possível; se sobrar resto, ele vai para as primeiras partes.
+    const total = sorted.length;
+    const base = Math.floor(total / 3);
+    const rem = total % 3;
+    const tamanhos = [0,1,2].map(i => base + (i < rem ? 1 : 0));
+
+    const profissionais = [
+      { nome:'Paulo Xavier', formacao:'Psicólogo', cor:'0B2F7A' },
+      { nome:'Danilo Braga', formacao:'Psicólogo', cor:'159947' },
+      { nome:'Keomara Teles', formacao:'Assistente Social', cor:'DB2777' }
+    ];
+    let cursor = 0;
+    profissionais.forEach((p,i) => { p.rows = sorted.slice(cursor, cursor + tamanhos[i]); cursor += tamanhos[i]; });
+
+    const out = XLSX.utils.book_new();
+    const used = new Set();
+    const primeiraLetra = v => { const t = String(v || '').trim(); return t ? t.charAt(0).toUpperCase() : '—'; };
+
+    const summary = [['Técnico responsável','Formação','Nº de famílias','Faixa alfabética']];
+    profissionais.forEach(p => {
+      const faixa = p.rows.length ? `${primeiraLetra(p.rows[0][nameIdx])} a ${primeiraLetra(p.rows[p.rows.length-1][nameIdx])}` : '—';
+      summary.push([p.nome, p.formacao, p.rows.length, faixa]);
+    });
+    XLSX.utils.book_append_sheet(out, XLSX.utils.aoa_to_sheet(summary), safeSheetName('Resumo da divisão', used));
+    profissionais.forEach(p => {
+      const rows = [header, ...p.rows];
+      p.sheetName = safeSheetName(`${p.nome} - ${p.formacao}`, used);
+      XLSX.utils.book_append_sheet(out, XLSX.utils.aoa_to_sheet(rows), p.sheetName);
+    });
+
+    const bordaLeve = {
+      top:{style:'thin',color:{rgb:'D9E2F3'}}, bottom:{style:'thin',color:{rgb:'D9E2F3'}},
+      left:{style:'thin',color:{rgb:'D9E2F3'}}, right:{style:'thin',color:{rgb:'D9E2F3'}}
+    };
+    const estiloCelula = { font:{name:'Arial',sz:12,color:{rgb:'1F2937'}}, alignment:{vertical:'center',wrapText:true}, border:bordaLeve };
+    const estiloCelulaAlternada = { ...estiloCelula, fill:{patternType:'solid',fgColor:{rgb:'F3F6FA'}} };
+    const corPorAba = name => (profissionais.find(p => p.sheetName === name) || {}).cor || '0B2F7A';
+
+    out.SheetNames.forEach(name => {
+      const ws = out.Sheets[name];
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      const corAba = corPorAba(name);
+      const estiloCabecalho = {
+        font:{name:'Arial',sz:12,bold:true,color:{rgb:'FFFFFF'}},
+        fill:{patternType:'solid',fgColor:{rgb:corAba}},
+        alignment:{horizontal:'center',vertical:'center',wrapText:true},
+        border:bordaLeve
+      };
+      ws['!tabColor'] = corAba;
+      ws['!rows'] = [];
+      for (let r = range.s.r; r <= range.e.r; r++) {
+        ws['!rows'][r] = { hpt: r === range.s.r ? 46 : 32 };
+        for (let c = range.s.c; c <= range.e.c; c++) {
+          const address = XLSX.utils.encode_cell({r,c});
+          if (!ws[address]) ws[address] = { v:'', t:'s' };
+          ws[address].s = r === range.s.r ? estiloCabecalho : (r % 2 === 0 ? estiloCelulaAlternada : estiloCelula);
+        }
+      }
+      ws['!autofilter'] = { ref: ws['!ref'] };
+      ws['!freeze'] = { xSplit:0, ySplit:1 };
+      ws['!cols'] = [];
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        let max = 12;
+        for (let r = range.s.r; r <= range.e.r; r++) {
+          const cell = ws[XLSX.utils.encode_cell({r,c})];
+          const value = cell && cell.v != null ? String(cell.v) : '';
+          max = Math.max(max, value.length);
+        }
+        ws['!cols'][c] = { wch: Math.min(max + 4, 42) };
+      }
+      ws['!margins'] = { left:0.25, right:0.25, top:0.5, bottom:0.5, header:0.2, footer:0.2 };
+    });
+    out.Workbook = out.Workbook || {};
+    out.Workbook.Sheets = out.SheetNames.map(name => ({ name, Hidden:0, TabColor:{rgb:corPorAba(name)} }));
+
+    const written = XLSX.write(out, {bookType:'xlsx', type:'array'});
+    const bytes = written instanceof ArrayBuffer ? new Uint8Array(written) : written;
+    let binary=''; const chunk=0x8000;
+    for (let i=0;i<bytes.length;i+=chunk) binary += String.fromCharCode(...bytes.slice(i,i+chunk));
+    return btoa(binary);
+  }
+
+  window.__handleVolanteUpload = async (input) => {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Esse arquivo está grande demais (acima de 5 MB).');
+      input.value = '';
+      return;
+    }
+    try {
+      if (!window.XLSX) throw new Error('Biblioteca de planilhas não carregada.');
+      const base64 = await fileToBase64(file);
+      const outBase64 = makeVolanteDivisaoWorkbook(base64);
+      const nomeArquivo = 'Território Volante - Divisão por técnico.xlsx';
+      const link = document.createElement('a');
+      link.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + outBase64;
+      link.download = nomeArquivo;
+      document.body.appendChild(link); link.click(); link.remove();
+      input.value = '';
+      alert(`Divisão gerada e baixada com sucesso: ${nomeArquivo}`);
+    } catch (e) {
+      console.error(e);
+      alert('Não consegui dividir esta tabela. Confirme se a primeira linha tem os títulos das colunas e se há famílias nas linhas seguintes.');
+      input.value = '';
+    }
   };
 
   function guessMesAnoFromWorkbook(base64) {
