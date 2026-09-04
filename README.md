@@ -132,6 +132,20 @@ Na barra lateral do app, novo bloco **"Repercussão de Condicionalidades"**:
 
 **Limite:** por ser guardado no Firestore (plano gratuito), cada planilha precisa ter até ~900 KB. As planilhas de Repercussão normalmente ficam bem abaixo disso.
 
+## 8.1 Divisão do Território Volante por técnico
+
+Na barra lateral, bloco **"Território Volante — Divisão por técnico"**:
+
+- Clique em **"Enviar tabela (.xlsx)"** e selecione a planilha de condicionalidades só do Território Volante (a primeira linha precisa ter os títulos das colunas).
+- O app identifica a coluna do nome da família (procura por "Nome do Responsável Familiar"; se não achar, usa qualquer coluna com "nome"; se ainda não achar, usa a primeira coluna).
+- As famílias são ordenadas de **A a Z** por esse nome e divididas em **três partes iguais** (se o total não for múltiplo de 3, as primeiras partes ficam com uma família a mais).
+- O app baixa na hora uma planilha nova, **"Território Volante - Divisão por técnico.xlsx"**, com 4 abas:
+  - **Resumo da divisão** — quantas famílias cada um recebeu e a faixa alfabética de cada parte.
+  - **Paulo Xavier - Psicólogo** — 1ª parte (A→).
+  - **Danilo Braga - Psicólogo** — 2ª parte (meio).
+  - **Keomara Teles - Assistente Social** — 3ª parte (→Z).
+- Nada é guardado na nuvem nem no aparelho — é só enviar e baixar. O arquivo original enviado não é alterado.
+
 ## 9. Personalizando
 
 - Cores, textos e ícones: tudo está em `index.html` (é um arquivo único, fácil de editar).
