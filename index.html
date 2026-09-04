@@ -1,0 +1,1314 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anona — Bolsa Família 2026</title>
+<meta name="description" content="Anona - Sistema de acompanhamento de condicionalidades do Bolsa Família">
+<meta name="theme-color" content="#0B2F7A">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --azul:#0B2F7A;
+    --azul-deep:#061D52;
+    --amarelo:#FFCC29;
+    --amarelo-text:#6B4E00;
+    --verde:#159947;
+    --paper:#F7F8FA;
+  }
+  body{ font-family:'Inter',sans-serif; background:var(--paper); }
+  .display{ font-family:'Space Grotesk',sans-serif; }
+  .flag-ribbon{ height:6px; background:linear-gradient(90deg, var(--verde) 0 33%, var(--amarelo) 33% 66%, var(--azul) 66% 100%); }
+  .calendar-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:1px; background:#e2e8f0; border:1px solid #e2e8f0; }
+  .day-cell{ min-height:92px; background:#fff; cursor:pointer; position:relative; padding:.4rem; display:flex; flex-direction:column; transition:.15s; }
+  .day-cell:hover{ background:#f8fafc; }
+  .day-cell.selected{ outline:2px solid var(--azul); outline-offset:-2px; background:#eef3fb; z-index:1; }
+  .day-cell.empty{ background:#f8fafc; cursor:default; }
+  .day-cell.payday::before{ content:""; position:absolute; inset:0; background:repeating-linear-gradient(135deg, rgba(255,204,41,.18) 0 6px, transparent 6px 12px); pointer-events:none; }
+  .badge{ font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; padding:1px 6px; border-radius:4px; }
+  .scrollhide::-webkit-scrollbar{ display:none; }
+  .fade-in{ animation: fadeIn .25s ease both; }
+  @keyframes fadeIn{ from{ opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
+  @media (prefers-reduced-motion: reduce){ .fade-in{ animation:none; } }
+</style>
+</head>
+<body class="text-slate-900">
+
+<!-- TELA DE SENHA (bloqueia o app até digitar a senha correta) -->
+<div id="lockScreen" class="fixed inset-0 z-[9999] flex items-center justify-center px-4" style="background:linear-gradient(120deg,var(--azul-deep),var(--azul));">
+  <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm text-center">
+    <div class="mx-auto mb-3 w-12 h-12 rounded-xl flex items-center justify-center" style="background:#eef3fb;">
+      <i data-lucide="lock" class="w-6 h-6" style="color:var(--azul)"></i>
+    </div>
+    <h1 class="display font-bold text-lg mb-1">Anona</h1>
+    <p id="lockYearSubtitle" class="text-xs text-slate-400 mb-3">Bolsa Família 2026</p>
+    <p class="text-xs text-slate-500 mb-4">Digite a senha para abrir o app.</p>
+    <form id="lockForm" class="space-y-3" autocomplete="off">
+      <input id="lockPass" type="password" placeholder="Senha" autocomplete="current-password"
+        class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2"
+        style="--tw-ring-color:var(--azul)" />
+      <p id="lockError" class="text-xs font-semibold hidden" style="color:#c0392b;">Senha incorreta. Tente de novo.</p>
+      <button type="submit" class="w-full text-white py-2 rounded-xl text-sm font-bold" style="background:var(--azul)">Entrar</button>
+    </form>
+  </div>
+</div>
+
+<div id="appContent" style="display:none;">
+
+<!-- HEADER -->
+<header class="text-white shadow-lg" style="background:linear-gradient(120deg,var(--azul-deep),var(--azul));">
+  <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <div class="bg-white/10 p-2 rounded-xl"><i data-lucide="calendar-heart" class="w-6 h-6" style="color:var(--amarelo)"></i></div>
+      <div>
+        <h1 class="display font-bold text-lg leading-none tracking-tight">Anona</h1>
+        <p class="text-[11px] text-blue-200 uppercase tracking-widest mt-1">Acompanhamento de condicionalidades · Bolsa Família <span id="headerYearSpan">2026</span></p>
+        <p class="text-[10px] text-blue-300/80 mt-0.5">Paulo Xavier · CRP-20/09816 · Psicólogo</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <div id="authArea" class="text-right text-xs"></div>
+      <button onclick="sairDoApp()" title="Sair (travar o app e pedir a senha de novo)"
+        class="bg-white/10 hover:bg-white/20 p-2 rounded-xl transition">
+        <i data-lucide="lock" class="w-4 h-4"></i>
+      </button>
+    </div>
+  </div>
+  <div class="flag-ribbon"></div>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+  <!-- COLUNA ESQUERDA -->
+  <aside class="lg:col-span-1 space-y-4 order-2 lg:order-1">
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+      <h2 class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+        <i data-lucide="file-down" class="w-4 h-4" style="color:var(--azul)"></i> Exportar
+      </h2>
+      <p class="text-xs text-slate-500 mb-3">Baixe suas anotações em PDF, de todos os meses ou só de um mês específico.</p>
+      <select id="pdfMonthFilter" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold mb-3 focus:outline-none focus:ring-2" style="--tw-ring-color:var(--azul)">
+        <option value="all">Todos os meses</option>
+        <option value="0">Janeiro</option>
+        <option value="1">Fevereiro</option>
+        <option value="2">Março</option>
+        <option value="3">Abril</option>
+        <option value="4">Maio</option>
+        <option value="5">Junho</option>
+        <option value="6">Julho</option>
+        <option value="7">Agosto</option>
+        <option value="8">Setembro</option>
+        <option value="9">Outubro</option>
+        <option value="10">Novembro</option>
+        <option value="11">Dezembro</option>
+      </select>
+      <button onclick="exportNotesPDF()" class="w-full text-white px-4 py-2 rounded-xl text-xs font-bold transition hover:opacity-90 flex items-center justify-center gap-2" style="background:var(--azul)">
+        <i data-lucide="download" class="w-3.5 h-3.5"></i> Baixar PDF das anotações
+      </button>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+      <h2 class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+        <i data-lucide="credit-card" class="w-4 h-4" style="color:var(--azul)"></i> Seu NIS
+      </h2>
+      <p class="text-xs text-slate-500 mb-2">Digite o <strong>último dígito</strong> do seu NIS para destacar seu dia de pagamento no calendário.</p>
+      <input id="nisInput" maxlength="1" inputmode="numeric" placeholder="Ex: 7"
+        class="w-full text-center text-2xl font-black tracking-widest border-2 rounded-xl py-2" style="border-color:var(--azul); color:var(--azul)">
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+      <h2 class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+        <i data-lucide="file-spreadsheet" class="w-4 h-4" style="color:var(--azul)"></i> Repercussão de Condicionalidades
+      </h2>
+      <p class="text-xs text-slate-500 mb-3">Guarde aqui a planilha que o MDS manda todo mês ímpar. Fica sincronizada na nuvem (se você estiver logado) e você baixa de novo quando precisar.</p>
+      <label class="w-full flex items-center justify-center gap-2 border-2 border-dashed rounded-xl py-3 text-xs font-bold cursor-pointer hover:bg-slate-50 mb-3" style="border-color:var(--azul); color:var(--azul)">
+        <i data-lucide="upload" class="w-4 h-4"></i> Enviar planilha (.xlsx)
+        <input type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="__handleReportUpload(this)">
+      </label>
+      <select id="reportAnoFilter" onchange="renderReports()" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold mb-3 focus:outline-none focus:ring-2" style="--tw-ring-color:var(--azul)">
+        <option value="all">Todos os anos</option>
+      </select>
+      <div class="border-t border-slate-100 pt-3 mt-1 space-y-2">
+        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Filtrar planilha por bairro</label>
+        <select id="reportFileFilter" onchange="loadReportFilterOptions()" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2" style="--tw-ring-color:var(--azul)">
+          <option value="">Escolha uma planilha</option>
+        </select>
+        <select id="reportBairroFilter" multiple size="5" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2" style="--tw-ring-color:var(--azul)" disabled></select>
+        <p class="text-[10px] text-slate-400">Use Ctrl (Windows) ou Command (Mac) para selecionar vários bairros. Sem seleção, baixa todos.</p>
+        <button onclick="downloadFilteredReport()" class="w-full text-white px-3 py-2 rounded-xl text-xs font-bold transition hover:opacity-90 flex items-center justify-center gap-2" style="background:var(--azul)">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i> Baixar planilha filtrada
+        </button>
+      </div>
+      <div id="reportsList" class="space-y-2"></div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+      <h2 class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+        <i data-lucide="info" class="w-4 h-4" style="color:var(--azul)"></i> Destaques do mês
+      </h2>
+      <div id="monthSummary" class="space-y-3"></div>
+    </div>
+
+    <div class="text-white rounded-2xl shadow-sm p-5" style="background:var(--azul-deep);">
+      <h3 class="text-[10px] font-bold uppercase opacity-60 mb-3 tracking-wider">Legenda</h3>
+      <div class="grid grid-cols-1 gap-2 text-[11px] font-bold uppercase">
+        <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full" style="background:var(--amarelo)"></span>Dia de pagamento (seu NIS)</div>
+        <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>Saúde</div>
+        <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>Educação</div>
+        <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-blue-400"></span>Sicon/Recursos</div>
+        <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-purple-400"></span>Interrupção</div>
+        <div class="flex items-center gap-2"><i data-lucide="pin" class="w-3 h-3" style="color:var(--amarelo)"></i>Nota normal</div>
+        <div class="flex items-center gap-2"><i data-lucide="star" class="w-3 h-3" style="color:var(--amarelo)"></i>Nota com ênfase</div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+      <h2 class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+        <i data-lucide="wallet" class="w-4 h-4" style="color:var(--azul)"></i> Valores em vigor
+      </h2>
+      <ul class="text-xs text-slate-600 space-y-2 leading-relaxed">
+        <li><strong class="text-slate-800">R$ 600</strong> — valor mínimo garantido por família (Benefício Complementar).</li>
+        <li><strong class="text-slate-800">+ R$ 150</strong> por criança de 0 a 6 anos (Benefício Primeira Infância).</li>
+        <li><strong class="text-slate-800">+ R$ 50</strong> por gestante, nutriz ou criança/adolescente de 7 a 18 anos incompletos (Benefício Variável Familiar).</li>
+      </ul>
+      <p class="text-[10px] text-slate-400 mt-3 italic">Valores somam-se conforme a composição familiar registrada no CadÚnico.</p>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+      <h2 class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+        <i data-lucide="shield-check" class="w-4 h-4" style="color:var(--azul)"></i> Regras importantes
+      </h2>
+      <ul class="text-xs text-slate-600 space-y-2 leading-relaxed list-disc pl-4">
+        <li>Pagamentos nos <strong>últimos 10 dias úteis</strong> de cada mês, exceto dezembro (encerra antes, dia 23).</li>
+        <li>Atualize o <strong>Cadastro Único</strong> a cada <strong>24 meses</strong> ou sempre que a família mudar (renda, endereço, filhos, escola).</li>
+        <li>O benefício depende do cumprimento de condicionalidades de <strong>saúde</strong> (vacinação, pré-natal) e <strong>frequência escolar</strong>.</li>
+        <li>As parcelas ficam disponíveis para saque por até <strong>180 dias</strong>.</li>
+        <li>Movimente pelo cartão do programa, no app <strong>Caixa Tem</strong> ou em correspondentes Caixa Aqui.</li>
+      </ul>
+    </div>
+
+    <div class="rounded-2xl p-5 border" style="background:#FFF8DF; border-color:#FFE07A;">
+      <h3 class="text-[10px] font-bold uppercase mb-2 tracking-wider" style="color:var(--amarelo-text);">Atendimento</h3>
+      <div class="flex justify-between text-sm font-bold" style="color:var(--azul-deep)">
+        <span>Disque Social (MDS): 121</span>
+        <span>Caixa: 111</span>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- COLUNA CENTRAL -->
+  <section class="lg:col-span-3 space-y-6 order-1 lg:order-2">
+
+    <div class="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+      <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+        <button onclick="changeMonth(-1)" id="btnPrev" class="p-2 hover:bg-slate-100 rounded-full transition disabled:opacity-20">
+          <i data-lucide="chevron-left" class="w-6 h-6 text-slate-600"></i>
+        </button>
+        <h3 id="currentMonthLabel" class="display text-xl sm:text-2xl font-bold text-slate-800 capitalize"></h3>
+        <button onclick="changeMonth(1)" id="btnNext" class="p-2 hover:bg-slate-100 rounded-full transition disabled:opacity-20">
+          <i data-lucide="chevron-right" class="w-6 h-6 text-slate-600"></i>
+        </button>
+      </div>
+      <div class="grid grid-cols-7 text-center text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase py-2 bg-slate-50/60">
+        <div>Dom</div><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div>
+      </div>
+      <div id="calendarGrid" class="calendar-grid"></div>
+    </div>
+
+    <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div class="space-y-4">
+        <div class="flex items-center gap-4">
+          <div id="selectedDayBox" class="text-white w-14 h-14 flex items-center justify-center rounded-2xl font-black text-2xl shadow-lg" style="background:var(--azul)">01</div>
+          <div>
+            <h2 id="selectedFullDate" class="text-lg font-bold text-slate-800 leading-tight"></h2>
+            <p id="selectedDayName" class="text-sm text-slate-500 font-medium capitalize"></p>
+          </div>
+        </div>
+        <div id="eventList" class="space-y-3"></div>
+      </div>
+
+      <div class="bg-slate-50 rounded-2xl p-4 border border-slate-100 h-full flex flex-col">
+        <label class="text-[10px] font-bold text-slate-400 uppercase mb-2 flex items-center gap-2">
+          <i data-lucide="sticky-note" class="w-3.5 h-3.5"></i> Sua anotação do dia
+        </label>
+        <textarea id="noteInput" rows="5" class="flex-1 w-full bg-white rounded-xl border border-slate-200 p-3 text-sm resize-none focus:outline-none focus:ring-2" style="--tw-ring-color:var(--azul)" placeholder="Ex: liguei para a CRAS, atualizei o cadastro..."></textarea>
+        <div class="mt-3 flex items-center gap-2">
+          <input type="checkbox" id="noteEmphasis" class="w-4 h-4 rounded" style="accent-color:var(--azul)">
+          <label for="noteEmphasis" class="text-[11px] font-bold text-slate-600 flex items-center gap-1 cursor-pointer">
+            <i data-lucide="star" class="w-3.5 h-3.5" style="color:var(--amarelo-text)"></i> Marcar como importante (ênfase)
+          </label>
+        </div>
+        <div class="mt-2 flex items-center justify-between">
+          <span id="noteStatus" class="text-[10px] text-slate-400"></span>
+          <button onclick="saveNote()" class="text-white px-4 py-2 rounded-xl text-xs font-bold transition hover:opacity-90" style="background:var(--azul)">Salvar nota</button>
+        </div>
+      </div>
+    </div>
+
+  </section>
+</main>
+
+<footer class="max-w-6xl mx-auto px-4 pb-10 text-center text-[11px] text-slate-400 space-y-1">
+  <p id="footerYearText">Datas conforme calendário oficial MDS/Caixa 2026. Este app é uma ferramenta independente de organização pessoal — não é canal oficial do governo.</p>
+  <p class="font-semibold text-slate-500">Criado por Paulo Xavier — CRP-20/09816 — Psicólogo</p>
+</footer>
+
+<!-- MODAL LOGIN -->
+<div id="authModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+  <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm fade-in">
+    <h3 class="display font-bold text-lg mb-1">Sincronizar suas notas</h3>
+    <p class="text-xs text-slate-500 mb-4">Entre com e-mail e senha para acessar suas anotações em qualquer aparelho.</p>
+    <input id="authEmail" type="email" placeholder="seu@email.com" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2" style="--tw-ring-color:var(--azul)">
+    <input id="authPass" type="password" placeholder="Senha (mín. 6 caracteres)" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2" style="--tw-ring-color:var(--azul)">
+    <p id="authError" class="text-xs text-red-500 mb-2 hidden"></p>
+    <div class="flex gap-2">
+      <button onclick="doLogin()" class="flex-1 text-white py-2 rounded-xl text-sm font-bold" style="background:var(--azul)">Entrar</button>
+      <button onclick="doSignup()" class="flex-1 border-2 py-2 rounded-xl text-sm font-bold" style="border-color:var(--azul); color:var(--azul)">Criar conta</button>
+    </div>
+    <button onclick="closeAuthModal()" class="w-full text-center text-xs text-slate-400 mt-3 hover:text-slate-600">Continuar sem sincronizar (só neste aparelho)</button>
+  </div>
+</div>
+
+<!-- FIREBASE -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import {
+    getAuth, onAuthStateChanged, createUserWithEmailAndPassword,
+    signInWithEmailAndPassword, signOut
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import {
+    getFirestore, doc, getDoc, setDoc, enableIndexedDbPersistence,
+    collection, addDoc, getDocs, deleteDoc, query, orderBy
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBASuIGCLTmykRmyv8ux6Es2BCJuQztTsw",
+    authDomain: "bolsa-familia-app-13e12.firebaseapp.com",
+    projectId: "bolsa-familia-app-13e12",
+    storageBucket: "bolsa-familia-app-13e12.firebasestorage.app",
+    messagingSenderId: "1054790238041",
+    appId: "1:1054790238041:web:426c3d1c35a6e3e52d9648"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  enableIndexedDbPersistence(db).catch(() => {});
+
+  let currentUser = null;
+  let notes = {};
+  let reports = []; // arquivos de Repercussão de Condicionalidades guardados
+
+  const authArea = document.getElementById('authArea');
+  const authModal = document.getElementById('authModal');
+  const authError = document.getElementById('authError');
+
+  function migrateNotes(raw){
+    const out = {};
+    Object.keys(raw || {}).forEach(k => {
+      const v = raw[k];
+      out[k] = (typeof v === 'string') ? { text: v, emphasis: false } : v;
+    });
+    return out;
+  }
+
+  window.openAuthModal = () => { authArea && authModal.classList.remove('hidden'); authModal.classList.add('flex'); };
+  window.closeAuthModal = () => { authModal.classList.add('hidden'); authModal.classList.remove('flex'); };
+
+  window.doLogin = async () => {
+    authError.classList.add('hidden');
+    try {
+      await signInWithEmailAndPassword(auth, document.getElementById('authEmail').value.trim(), document.getElementById('authPass').value);
+      closeAuthModal();
+    } catch (e) { showAuthError(e); }
+  };
+  window.doSignup = async () => {
+    authError.classList.add('hidden');
+    try {
+      await createUserWithEmailAndPassword(auth, document.getElementById('authEmail').value.trim(), document.getElementById('authPass').value);
+      closeAuthModal();
+    } catch (e) { showAuthError(e); }
+  };
+  window.doLogout = async () => { await signOut(auth); };
+
+  function showAuthError(e) {
+    const map = {
+      'auth/invalid-email': 'E-mail inválido.',
+      'auth/weak-password': 'A senha precisa ter ao menos 6 caracteres.',
+      'auth/email-already-in-use': 'Este e-mail já tem uma conta — tente Entrar.',
+      'auth/invalid-credential': 'E-mail ou senha incorretos.',
+      'auth/user-not-found': 'Conta não encontrada — tente Criar conta.',
+      'auth/wrong-password': 'Senha incorreta.'
+    };
+    authError.textContent = map[e.code] || 'Não foi possível concluir. Tente novamente.';
+    authError.classList.remove('hidden');
+  }
+
+  async function loadNotesFromCloud() {
+    if (!currentUser) return;
+    const snap = await getDoc(doc(db, 'users', currentUser.uid));
+    notes = migrateNotes(snap.exists() && snap.data().notes ? snap.data().notes : {});
+    render();
+  }
+
+  const MESES_NOMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  function guessMesAno(filename) {
+    const map = { jan:0, fev:1, mar:2, abr:3, mai:4, jun:5, jul:6, ago:7, set:8, out:9, nov:10, dez:11 };
+    const norm = filename.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    let mes = null, ano = null;
+    const mMes = norm.match(/(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)/);
+    if (mMes) mes = map[mMes[1]];
+    const mAno = norm.match(/20\d{2}/);
+    if (mAno) ano = parseInt(mAno[0], 10);
+    return { mes, ano };
+  }
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result.split(',')[1]);
+      r.onerror = () => reject(new Error('Falha ao ler o arquivo'));
+      r.readAsDataURL(file);
+    });
+  }
+
+  async function loadReports() {
+    // Planilhas ficam somente neste navegador; não são enviadas para a nuvem.
+    reports = JSON.parse(localStorage.getItem('pbf_repercussao_local') || '[]')
+      .filter(r => r && r.dataBase64 && r.dataBase64.length > 100);
+    localStorage.setItem('pbf_repercussao_local', JSON.stringify(reports));
+    renderReports();
+  }
+
+  function normalizeText(value) {
+    return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
+  }
+
+  function makeCrasFormattedWorkbook(base64) {
+    const source = XLSX.read(bytesFromBase64(base64), {type:'array'});
+    const mapaBairros = {
+      'BURITIS':['Fernanda Gomes','Psicóloga','Buritis'],
+      'BURITI':['Fernanda Gomes','Psicóloga','Buritis'],
+      'CAIMBE':['Fernanda Gomes','Psicóloga','Caimbé'],
+      'LIBERDADE':['Cléo Sousa','Assistente Social','Liberdade'],
+      'PRICUMA':['Cléo Sousa','Assistente Social','Pricumã'],
+      'CAMBARA':['Bárbara Parente','Assistente Social','Cambará'],
+      'OLIMPICO':['Bárbara Parente','Assistente Social','Olímpico'],
+      'TANCREDO NEVES':['Bárbara Parente','Assistente Social','Tancredo Neves'],
+      'CENTENARIO':['Susy Andrade','Pedagoga','Centenário'],
+      'NOVA CANAA':['Susy Andrade','Pedagoga','Nova Canaã'],
+      'CINTURAO VERDE':['Paloma de Assis','Assistente Social','Cinturão Verde'],
+      'JOQUEI CLUBE':['Paloma de Assis','Assistente Social','Jóquei Clube'],
+      'ASA BRANCA':['Rafaela Garcia','Assistente Social','Asa Branca'],
+      'ASA BRACA':['Rafaela Garcia','Assistente Social','Asa Branca'],
+      'ASAS BRANCA':['Rafaela Garcia','Assistente Social','Asa Branca'],
+      '13 DE SETEMBRO':['Território Volante','Equipe volante','13 de Setembro'],
+      '13 DE SEEMBREO':['Território Volante','Equipe volante','13 de Setembro'],
+      'MARECHAL RONDON':['Território Volante','Equipe volante','Marechal Rondon'],
+      'MARECHAL RONDON (OCUPACAO)':['Território Volante','Equipe volante','Marechal Rondon'],
+      'NOVA VIDA':['Território Volante','Equipe volante','Nova Vida (Ocupação)'],
+      'NOVA VIDA (OCUPACAO)':['Território Volante','Equipe volante','Nova Vida (Ocupação)'],
+      'PROFESSORA ARACELI SOUTO MAIOR':['Território Volante','Equipe volante','Professora Araceli Souto Maior']
+    };
+    const groups = new Map();
+    let rawHeader = null;
+    const informacoesRelatorio = ['CRAS Cristiana Vicente Nunes'];
+    source.SheetNames.forEach(sheetName => {
+      const rows = XLSX.utils.sheet_to_json(source.Sheets[sheetName], {header:1, defval:''});
+      const headerIndex = rows.findIndex(row => {
+        const labels = row.map(v => normalizeText(v));
+        return labels.some(v => v === 'nº da linha' || v === 'n da linha') && labels.includes('bairro');
+      });
+      if (headerIndex < 0) return;
+      const h = rows[headerIndex];
+      if (!rawHeader) rawHeader = h;
+      rows.slice(0, headerIndex).forEach(row => row.forEach(value => {
+        const text = String(value || '').trim();
+        const manter = /^(Programa Bolsa Família|Ministério do Desenvolvimento|Secretaria Nacional de Renda|UF:|Município:|Período da Repercusão:|Período da Repercussão:|Tipo de Benefício:|Data\/hora de geração:|Efeito:|Total de descumpridores:|Total de famílias com efeito:)/i.test(text);
+        if (manter && !informacoesRelatorio.includes(text)) informacoesRelatorio.push(text);
+      }));
+      const bairroIdx = h.findIndex(v => normalizeText(v) === 'bairro');
+      const responsavelIdx = h.findIndex(v => normalizeText(v) === 'nome do responsavel familiar');
+      const efeitoIdx = h.findIndex(v => normalizeText(v) === 'efeito');
+      let currentBairro = '';
+      let currentResponsavel = '';
+      let currentEfeito = '';
+      let currentFamilyValues = [];
+      rows.slice(headerIndex + 1).forEach(row => {
+        if (!row.some(v => String(v).trim() !== '')) return;
+        const isContinuation = !String(row[bairroIdx] || '').trim() && row.length <= 6;
+        const fullRow = Array(h.length).fill('');
+        if (isContinuation && row.length <= 6 && h.length > 16) {
+          // O relatório MDS coloca linhas adicionais da família sem repetir
+          // os campos iniciais; reposicionamos os dados do integrante.
+          row.forEach((value, index) => { fullRow[12 + index] = value; });
+          currentFamilyValues.forEach((value, index) => { if (index < 12) fullRow[index] = value; });
+        } else {
+          row.forEach((value, index) => { if (index < fullRow.length) fullRow[index] = value; });
+        }
+        const rowBairro = String(fullRow[bairroIdx] || '').trim();
+        if (rowBairro) currentBairro = rowBairro;
+        if (!currentBairro) return;
+        if (!isContinuation) currentFamilyValues = fullRow.slice(0, 12);
+        if (responsavelIdx >= 0 && String(fullRow[responsavelIdx] || '').trim()) currentResponsavel = String(fullRow[responsavelIdx]).trim();
+        if (efeitoIdx >= 0 && String(fullRow[efeitoIdx] || '').trim()) currentEfeito = String(fullRow[efeitoIdx]).trim();
+        if (responsavelIdx >= 0 && !String(fullRow[responsavelIdx] || '').trim() && currentResponsavel) fullRow[responsavelIdx] = currentResponsavel;
+        if (efeitoIdx >= 0 && !String(fullRow[efeitoIdx] || '').trim() && currentEfeito) fullRow[efeitoIdx] = currentEfeito;
+        const key = normalizeText(currentBairro).toUpperCase();
+        let config = mapaBairros[key];
+        if (!config && key.includes('ARACELI') && key.includes('SOUTO')) config = ['Território Volante','Equipe volante','Professora Araceli Souto Maior'];
+        if (!config && key.includes('PROF') && key.includes('ARACEL')) config = ['Território Volante','Equipe volante','Professora Araceli Souto Maior'];
+        if (!config && key.includes('TANCREDO')) config = ['Bárbara Parente','Assistente Social','Tancredo Neves'];
+        if (!config) return;
+        const [team, formacao, bairroNome] = config;
+        if (!groups.has(team)) groups.set(team, {rows:[], bairros:new Set(), formacao});
+        const g = groups.get(team);
+        g.rows.push([bairroNome, team, formacao, ...fullRow]);
+        g.bairros.add(bairroNome);
+      });
+    });
+    if (!rawHeader || !groups.size) throw new Error('Não encontrei o cabeçalho do relatório bruto ou nenhum bairro do mapa do CRAS.');
+    const outputHeader = ['Bairro do território','Técnico/equipe','Formação',...rawHeader];
+    const out = XLSX.utils.book_new();
+    const used = new Set();
+    const sheetName = name => {
+      const base = String(name || 'Dados').replace(/[\\/?*\[\]:]/g,' ').slice(0,31).trim() || 'Dados';
+      let clean=base,n=2; while(used.has(clean)) clean=(base.slice(0,28)+' '+n++).slice(0,31);
+      used.add(clean); return clean;
+    };
+    const ordemTecnicos = ['Fernanda Gomes','Cléo Sousa','Bárbara Parente','Susy Andrade','Paloma de Assis','Rafaela Garcia','Território Volante'];
+    const gruposOrdenados = [...groups.entries()].sort((a,b) => ordemTecnicos.indexOf(a[0]) - ordemTecnicos.indexOf(b[0]));
+    const summary = [['Técnico/equipe','Formação','Bairros agrupados','Nº de bairros','Registros no relatório']];
+    gruposOrdenados.forEach(([team,g]) => {
+      const bairros=[...g.bairros].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+      summary.push([team,g.formacao,bairros.join('; '),bairros.length,g.rows.length]);
+    });
+    const resumoFinal = [
+      ...summary,
+      [],
+      ['INFORMAÇÕES DO RELATÓRIO'],
+      ...informacoesRelatorio.map(text => [text])
+    ];
+    XLSX.utils.book_append_sheet(out,XLSX.utils.aoa_to_sheet(resumoFinal),sheetName('Resumo do território'));
+    gruposOrdenados.forEach(([team,g]) => {
+      const finalRows = [outputHeader, ...g.rows];
+      XLSX.utils.book_append_sheet(out,XLSX.utils.aoa_to_sheet(finalRows),sheetName(team));
+    });
+    const bordaLeve = {
+      top: { style: 'thin', color: { rgb: 'D9E2F3' } },
+      bottom: { style: 'thin', color: { rgb: 'D9E2F3' } },
+      left: { style: 'thin', color: { rgb: 'D9E2F3' } },
+      right: { style: 'thin', color: { rgb: 'D9E2F3' } }
+    };
+    const estiloCabecalho = {
+      font: { name: 'Arial', sz: 12, bold: true, color: { rgb: 'FFFFFF' } },
+      fill: { patternType: 'solid', fgColor: { rgb: '0B2F7A' } },
+      alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+      border: bordaLeve
+    };
+    const estiloCelula = {
+      font: { name: 'Arial', sz: 12, color: { rgb: '1F2937' } },
+      alignment: { vertical: 'center', wrapText: true },
+      border: bordaLeve
+    };
+    const estiloCelulaAlternada = {
+      ...estiloCelula,
+      fill: { patternType: 'solid', fgColor: { rgb: 'F3F6FA' } }
+    };
+    const coresAbas = {
+      'Resumo do território': '0B2F7A',
+      'Fernanda Gomes': '159947',
+      'Cléo Sousa': '7C3AED',
+      'Bárbara Parente': 'DB2777',
+      'Susy Andrade': 'D97706',
+      'Paloma de Assis': '0891B2',
+      'Rafaela Garcia': '4F46E5',
+      'Território Volante': '65A30D'
+    };
+    const coresResumo = {
+      'Fernanda Gomes': 'E8F5E9',
+      'Cléo Sousa': 'F3E8FF',
+      'Bárbara Parente': 'FCE7F3',
+      'Susy Andrade': 'FFF3E0',
+      'Paloma de Assis': 'E0F7FA',
+      'Rafaela Garcia': 'E8EAF6',
+      'Território Volante': 'F0F9E8'
+    };
+    out.SheetNames.forEach(name => {
+      const ws = out.Sheets[name];
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      const corAba = coresAbas[name] || '0B2F7A';
+      // Cor da guia inferior da aba no Excel/LibreOffice.
+      ws['!tabColor'] = corAba;
+      ws['!rows'] = [];
+      for (let r = range.s.r; r <= range.e.r; r++) {
+        ws['!rows'][r] = { hpt: r === range.s.r ? 46 : 36 };
+        for (let c = range.s.c; c <= range.e.c; c++) {
+          const address = XLSX.utils.encode_cell({r,c});
+          if (!ws[address]) ws[address] = { v: '', t: 's' };
+          const isInfoTitle = String(ws[address].v || '') === 'INFORMAÇÕES DO RELATÓRIO';
+          const nomeResumo = name === 'Resumo do território' && r > range.s.r ? String(ws[XLSX.utils.encode_cell({r, c: 0})]?.v || '') : '';
+          const corResumo = coresResumo[nomeResumo];
+          ws[address].s = isInfoTitle
+            ? { ...estiloCabecalho, fill: { patternType: 'solid', fgColor: { rgb: corAba } } }
+            : r === range.s.r
+            ? { ...estiloCabecalho, fill: { patternType: 'solid', fgColor: { rgb: corAba } } }
+            : corResumo
+            ? { ...estiloCelula, fill: { patternType: 'solid', fgColor: { rgb: corResumo } }, font: { name: 'Arial', sz: 12, bold: c === 0, color: { rgb: '1F2937' } } }
+            : (r % 2 === 0 ? estiloCelulaAlternada : estiloCelula);
+        }
+      }
+      ws['!autofilter'] = { ref: ws['!ref'] };
+      ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+      ws['!cols'] = [];
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        let max = 12;
+        for (let r = range.s.r; r <= range.e.r; r++) {
+          const cell = ws[XLSX.utils.encode_cell({r,c})];
+          const value = cell && cell.v != null ? String(cell.v) : '';
+          max = Math.max(max, value.length);
+        }
+        const headerValue = String(ws[XLSX.utils.encode_cell({r: range.s.r, c})]?.v || '').toLowerCase();
+        const isLongText = /endereço|nome|motivo|tipo|referência|bairros agrupados|informações/.test(headerValue);
+        ws['!cols'][c] = { wch: Math.min(max + 4, isLongText ? 90 : 38) };
+      }
+      ws['!margins'] = { left: 0.25, right: 0.25, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 };
+    });
+    out.Workbook = out.Workbook || {};
+    out.Workbook.Sheets = out.SheetNames.map(name => ({
+      name,
+      Hidden: 0,
+      TabColor: { rgb: coresAbas[name] || '0B2F7A' }
+    }));
+    const written=XLSX.write(out,{bookType:'xlsx',type:'array'});
+    const bytes=written instanceof ArrayBuffer ? new Uint8Array(written) : written;
+    let binary=''; const chunk=0x8000;
+    for(let i=0;i<bytes.length;i+=chunk) binary+=String.fromCharCode(...bytes.slice(i,i+chunk));
+    return btoa(binary);
+  };
+
+  function guessMesAnoFromWorkbook(base64) {
+    const wb = XLSX.read(bytesFromBase64(base64), {type:'array'});
+    const meses = {janeiro:0, fevereiro:1, marco:2, março:2, abril:3, maio:4, junho:5, julho:6, agosto:7, setembro:8, outubro:9, novembro:10, dezembro:11};
+    for (const name of wb.SheetNames) {
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, defval:''});
+      for (const row of rows.slice(0, 15)) {
+        const text = row.map(v => String(v || '')).join(' ');
+        const match = text.match(/(?:per[ií]odo[^:]*:\s*)?(janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s*[/ de-]+\s*(20\d{2})/i);
+        if (match) return {mes: meses[normalizeText(match[1])], ano: parseInt(match[2], 10)};
+      }
+    }
+    return {mes:null, ano:null};
+  }
+
+  window.__handleReportUpload = async (input) => {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Esse arquivo está grande demais (acima de 5 MB) para guardar na nuvem.');
+      input.value = '';
+      return;
+    }
+    const originalBase64 = await fileToBase64(file);
+    const filenameGuess = guessMesAno(file.name);
+    const workbookGuess = guessMesAnoFromWorkbook(originalBase64);
+    let autoGuess = (workbookGuess.mes !== null && workbookGuess.ano !== null) ? workbookGuess : filenameGuess;
+    if (autoGuess.mes === null || autoGuess.ano === null) {
+      const dateInName = file.name.match(/(\d{2})(\d{2})(20\d{2})/);
+      if (dateInName) autoGuess = { mes: parseInt(dateInName[2], 10) - 1, ano: parseInt(dateInName[3], 10) };
+    }
+    if (autoGuess.mes === null || autoGuess.mes < 0 || autoGuess.mes > 11 || !autoGuess.ano) {
+      const now = new Date();
+      autoGuess = { mes: now.getMonth(), ano: now.getFullYear() };
+    }
+    const mes = autoGuess.mes;
+    const ano = autoGuess.ano;
+
+    try {
+      if (!window.XLSX) throw new Error('Biblioteca de planilhas não carregada.');
+      const dataBase64 = makeCrasFormattedWorkbook(originalBase64);
+      const nomeMes = MESES_NOMES[mes] || 'Mês';
+      const nomeArquivo = `Repercussão ${nomeMes} de ${ano} (CRAS Cristiana).xlsx`;
+      const testeSaida = XLSX.read(bytesFromBase64(dataBase64), {type:'array'});
+      if (!testeSaida.SheetNames.length || testeSaida.SheetNames.every(n => !XLSX.utils.sheet_to_json(testeSaida.Sheets[n], {header:1}).length)) {
+        throw new Error('A planilha tratada não contém dados.');
+      }
+      const linkDownload = document.createElement('a');
+      linkDownload.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + dataBase64;
+      linkDownload.download = nomeArquivo;
+      document.body.appendChild(linkDownload); linkDownload.click(); linkDownload.remove();
+      const record = { filename: nomeArquivo, mes, ano, sizeKB: Math.round((dataBase64.length * 3 / 4) / 1024), uploadedAt: Date.now(), dataBase64 };
+      try {
+        const local = JSON.parse(localStorage.getItem('pbf_repercussao_local') || '[]');
+        local.push({ id: 'local_' + Date.now(), ...record });
+        localStorage.setItem('pbf_repercussao_local', JSON.stringify(local));
+        await loadReports();
+      } catch (storageError) {
+        console.warn('Download concluído, mas não foi possível guardar a cópia neste navegador:', storageError);
+      }
+      input.value = '';
+      alert(`Planilha organizada e baixada com sucesso: ${nomeArquivo}`);
+    } catch (e) {
+      console.error(e);
+      alert('Não consegui organizar esta planilha. Confirme se ela possui a coluna “Técnico/equipe”.');
+      input.value = '';
+    }
+  };
+
+  window.__downloadReport = (id) => {
+    const rep = reports.find(r => r.id === id);
+    if (!rep) return;
+    const a = document.createElement('a');
+    a.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + rep.dataBase64;
+    a.download = rep.filename || `Repercussao_${MESES_NOMES[rep.mes]}_${rep.ano}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+
+  function bytesFromBase64(base64) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  function selectedBairros() {
+    return [...document.getElementById('reportBairroFilter').selectedOptions].map(o => o.value);
+  }
+
+  window.loadReportFilterOptions = async () => {
+    const fileId = document.getElementById('reportFileFilter').value;
+    const bairroEl = document.getElementById('reportBairroFilter');
+    bairroEl.innerHTML = '';
+    bairroEl.disabled = true;
+    if (!fileId || !window.XLSX) return;
+    const rep = reports.find(r => r.id === fileId);
+    if (!rep) return;
+    try {
+      const wb = XLSX.read(bytesFromBase64(rep.dataBase64), {type:'array'});
+      const bairros = new Set();
+      wb.SheetNames.forEach(name => {
+        if (name === 'Resumo do território') return;
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, defval:''});
+        const header = rows[0] || [];
+        const idx = header.findIndex(h => String(h).trim().toLowerCase() === 'bairro do território');
+        rows.slice(1).forEach(row => { if (idx >= 0 && row[idx]) bairros.add(String(row[idx]).trim()); });
+      });
+      [...bairros].sort((a,b) => a.localeCompare(b, 'pt-BR')).forEach(bairro => {
+        const opt = document.createElement('option'); opt.value = bairro; opt.textContent = bairro; bairroEl.appendChild(opt);
+      });
+      bairroEl.disabled = bairros.size === 0;
+    } catch (e) { alert('Não foi possível ler os bairros desta planilha.'); }
+  };
+
+  function safeSheetName(name, used) {
+    let clean = String(name || 'Dados').replace(/[\/?*\[\]:]/g, ' ').slice(0,31).trim() || 'Dados';
+    let base = clean, n = 2;
+    while (used.has(clean)) { clean = (base.slice(0, 28) + ' ' + n++).slice(0,31); }
+    used.add(clean); return clean;
+  }
+
+  window.downloadFilteredReport = () => {
+    const fileId = document.getElementById('reportFileFilter').value;
+    const rep = reports.find(r => r.id === fileId);
+    if (!rep) { alert('Escolha uma planilha primeiro.'); return; }
+    try {
+      const selected = selectedBairros();
+      const wb = XLSX.read(bytesFromBase64(rep.dataBase64), {type:'array'});
+      const outWb = XLSX.utils.book_new();
+      const used = new Set();
+      const summaryRows = [['Técnico/equipe','Formação','Bairros agrupados','Nº de bairros','Registros no relatório']];
+      wb.SheetNames.forEach(name => {
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, defval:''});
+        if (!rows.length) return;
+        if (name === 'Resumo do território') return;
+        const header = rows[0];
+        const idx = header.findIndex(h => String(h).trim().toLowerCase() === 'bairro do território');
+        const filtered = idx < 0 ? rows.slice(1) : rows.slice(1).filter(row => !selected.length || selected.includes(String(row[idx]).trim()));
+        if (!filtered.length) return;
+        const result = [header, ...filtered];
+        const sheetName = safeSheetName(name, used);
+        XLSX.utils.book_append_sheet(outWb, XLSX.utils.aoa_to_sheet(result), sheetName);
+        const formacao = filtered[0]?.[2] || '';
+        const bairroSet = [...new Set(filtered.map(row => String(row[idx] || '').trim()).filter(Boolean))];
+        summaryRows.push([name, formacao, bairroSet.join('; '), bairroSet.length, filtered.length]);
+      });
+      const summary = [['Técnico/equipe','Formação','Bairros agrupados','Nº de bairros','Registros no relatório'], ...summaryRows.slice(1)];
+      XLSX.utils.book_append_sheet(outWb, XLSX.utils.aoa_to_sheet(summary), safeSheetName('Resumo do território', used), true);
+      const base = (rep.filename || 'Repercussao').replace(/\.(xlsx|xls|csv)$/i, '');
+      const suffix = selected.length ? '_filtrada' : '_completa';
+      XLSX.writeFile(outWb, base + suffix + '.xlsx');
+    } catch (e) { console.error(e); alert('Não foi possível gerar a planilha filtrada.'); }
+  };
+
+  window.__deleteReport = async (id) => {
+    if (!confirm('Apagar este arquivo guardado? Essa ação não pode ser desfeita.')) return;
+    const local = JSON.parse(localStorage.getItem('pbf_repercussao_local') || '[]').filter(r => r.id !== id);
+    localStorage.setItem('pbf_repercussao_local', JSON.stringify(local));
+    await loadReports();
+  };
+
+  function renderReports() {
+    const wrap = document.getElementById('reportsList');
+    const anoFilterEl = document.getElementById('reportAnoFilter');
+    if (!wrap) return;
+
+    const anos = [...new Set(reports.map(r => r.ano))].sort((a,b) => b - a);
+    if (anoFilterEl) {
+      const current = anoFilterEl.value;
+      anoFilterEl.innerHTML = '<option value="all">Todos os anos</option>' + anos.map(a => `<option value="${a}">${a}</option>`).join('');
+      if ([...anoFilterEl.options].some(o => o.value === current)) anoFilterEl.value = current;
+    }
+    const anoFilter = anoFilterEl ? anoFilterEl.value : 'all';
+    const filtered = reports.filter(r => anoFilter === 'all' || String(r.ano) === anoFilter);
+    const fileFilterEl = document.getElementById('reportFileFilter');
+    if (fileFilterEl) {
+      const previous = fileFilterEl.value;
+      fileFilterEl.innerHTML = '<option value="">Escolha uma planilha</option>' + reports.map(r => `<option value="${r.id}">${MESES_NOMES[r.mes] || '?'} / ${r.ano} — ${r.filename || 'arquivo'}</option>`).join('');
+      if (reports.some(r => r.id === previous)) fileFilterEl.value = previous;
+    }
+
+    if (!filtered.length) {
+      wrap.innerHTML = '<p class="text-xs text-slate-400 italic">Nenhum arquivo guardado ainda.</p>';
+      return;
+    }
+    wrap.innerHTML = filtered.map(r => `
+      <div class="flex items-center justify-between gap-2 border border-slate-200 rounded-xl px-3 py-2">
+        <div class="min-w-0">
+          <p class="text-xs font-bold truncate">${MESES_NOMES[r.mes] || '?'} / ${r.ano}</p>
+          <p class="text-[10px] text-slate-400 truncate">${r.filename || ''} · ${r.sizeKB || 0} KB</p>
+        </div>
+        <div class="flex items-center gap-1 shrink-0">
+          <button onclick="__downloadReport('${r.id}')" title="Baixar" class="p-1.5 rounded-lg hover:bg-slate-100"><i data-lucide="download" class="w-4 h-4" style="color:var(--azul)"></i></button>
+          <button onclick="__deleteReport('${r.id}')" title="Apagar" class="p-1.5 rounded-lg hover:bg-slate-100"><i data-lucide="trash-2" class="w-4 h-4 text-red-500"></i></button>
+        </div>
+      </div>`).join('');
+    if (window.lucide) lucide.createIcons();
+  }
+
+  window.__persistNote = async (key, value) => {
+    if (value && value.text) notes[key] = value; else delete notes[key];
+    if (currentUser) {
+      await setDoc(doc(db, 'users', currentUser.uid), { notes }, { merge: true });
+    } else {
+      localStorage.setItem('pbf_notes_local', JSON.stringify(notes));
+    }
+  };
+
+  onAuthStateChanged(auth, async (user) => {
+    currentUser = user;
+    if (user) {
+      authArea.innerHTML = `
+        <div class="flex items-center gap-2 justify-end">
+          <span class="hidden sm:inline text-blue-100">${user.email}</span>
+          <button onclick="doLogout()" class="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg font-semibold">Sair</button>
+        </div>
+        <p class="text-[10px] text-blue-200 mt-1 flex items-center gap-1 justify-end"><span>●</span> sincronizado na nuvem</p>`;
+      await loadNotesFromCloud();
+      await loadReports();
+    } else {
+      notes = migrateNotes(JSON.parse(localStorage.getItem('pbf_notes_local') || '{}'));
+      authArea.innerHTML = `<button onclick="openAuthModal()" class="bg-white text-blue-900 px-3 py-1.5 rounded-lg font-bold hover:opacity-90">Sincronizar notas</button>`;
+      render();
+      await loadReports();
+    }
+  });
+
+  window.__getNotes = () => notes;
+</script>
+
+<!-- APP -->
+<script>
+/* ======================================================================
+   ANO VIGENTE — TROQUE SÓ ISSO AQUI TODO INÍCIO DE ANO (passo 1)
+   Esse número controla o título, o cabeçalho, o rodapé, o PDF exportado
+   e a navegação do calendário (não deixa passar para outro ano).
+   ====================================================================== */
+const ANO_VIGENTE = 2026;
+
+// Aplica o ANO_VIGENTE nos textos da tela (título da aba, tela de senha,
+// cabeçalho e rodapé) — assim você só troca o número lá em cima e tudo
+// isso se atualiza sozinho, sem precisar caçar cada lugar que mostra o ano.
+document.title = `Anona — Bolsa Família ${ANO_VIGENTE}`;
+document.getElementById('lockYearSubtitle').textContent = `Bolsa Família ${ANO_VIGENTE}`;
+document.getElementById('headerYearSpan').textContent = ANO_VIGENTE;
+document.getElementById('footerYearText').textContent =
+  `Datas conforme calendário oficial MDS/Caixa ${ANO_VIGENTE}. Este app é uma ferramenta independente de organização pessoal — não é canal oficial do governo.`;
+
+
+/* ======================================================================
+   DADOS DO CALENDÁRIO OFICIAL — TROQUE TODO INÍCIO DE ANO (passo 2)
+   Pegue os dados novos no calendário oficial MDS/Caixa (bolsa família) e
+   nos comunicados de Condicionalidades (saúde/educação/SICON) do ano
+   vigente, e substitua os três blocos abaixo (monthHighlights,
+   officialEvents e paymentCalendar) pelos equivalentes do novo ano.
+   Mantenha o mesmo formato (mesmas chaves 0–11 para meses, mesmo
+   formato de data "AAAA-MM-DD" e mesma ordem de 10 posições — dígito
+   final do NIS 1,2,3,4,5,6,7,8,9,0 — no paymentCalendar).
+   ====================================================================== */
+const monthHighlights = {
+  0:[{type:"saude",title:"Saúde: 1ª Vigência",desc:"Período de Coleta e Registro iniciado (Jan-Jun)."},{type:"interrupt",title:"Interrupção",desc:"Mês de aplicação dos efeitos de Interrupção Temporária."}],
+  1:[{type:"saude",title:"Saúde: 1ª Vigência",desc:"Período de Coleta em andamento."},{type:"edu",title:"Educação: Início de Ciclo",desc:"Acompanhamento da frequência escolar (Fev/Mar)."}],
+  2:[{type:"sicon",title:"Mês de Repercussão",desc:"Efeitos de não cumprimento (Ref: Out/Nov-25 e 2ª Vig Saúde-25)."},{type:"saude",title:"Saúde: 1ª Vigência",desc:"Registro no sistema aberto."}],
+  3:[{type:"edu",title:"Edu: Fev/Mar",desc:"Mês de encerramento do sistema de frequência."}],
+  4:[{type:"sicon",title:"Mês de Repercussão",desc:"Efeitos de não cumprimento (Ref: Fev/Mar-26)."}],
+  5:[{type:"saude",title:"Saúde: Final 1ª Vig",desc:"Mês final para coleta de dados da 1ª vigência."}],
+  6:[{type:"saude",title:"Saúde: 2ª Vigência",desc:"Início da coleta da 2ª vigência (Jul-Dez)."},{type:"sicon",title:"Mês de Repercussão",desc:"Efeitos de não cumprimento (Ref: Abr/Mai-26)."}],
+  7:[],
+  8:[{type:"sicon",title:"Mês de Repercussão",desc:"Efeitos de não cumprimento (Ref: Jun/Jul-26 e 1ª Vig Saúde-26)."}],
+  9:[],
+  10:[{type:"sicon",title:"Mês de Repercussão",desc:"Efeitos (Ref: Ago/Set-26)."}],
+  11:[]
+};
+
+const officialEvents = {
+  "2026-01-01":[{type:"saude",title:"Saúde: Início Coleta (1ª Vig)",desc:"Início do registro (Jan a Jun/2026)."}],
+  "2026-02-17":[{type:"saude",title:"Saúde: Abertura Sistema (1ª Vig)",desc:"Abertura do sistema para registro."}],
+  "2026-06-30":[{type:"saude",title:"Saúde: Final Coleta (1ª Vig)",desc:"Último dia para coleta da 1ª vigência."}],
+  "2026-07-01":[{type:"saude",title:"Saúde: Início Coleta (2ª Vig)",desc:"Início do registro (Jul a Dez/2026)."}],
+  "2026-07-10":[{type:"saude",title:"Saúde: Fechamento (1ª Vig)",desc:"Prazo final digitação 1ª Vigência."}],
+  "2026-08-17":[{type:"saude",title:"Saúde: Abertura (2ª Vig)",desc:"Abertura do sistema (2ª Vigência)."}],
+  "2026-12-31":[{type:"saude",title:"Saúde: Final Coleta (2ª Vig)",desc:"Fim da coleta 2ª vigência."}],
+  "2026-03-16":[{type:"edu",title:"Edu: Impressão (Fev/Mar)"}],
+  "2026-03-31":[{type:"edu",title:"Edu: Registro (Fev/Mar)"}],
+  "2026-04-23":[{type:"edu",title:"Edu: Fechamento (Fev/Mar)"},{type:"sicon",title:"SICON: Recurso Mar/26",desc:"Prazo para registro de recursos no Sicon."},{type:"interrupt",title:"Interrupt: Limite Abr",desc:"Data limite para vigência em Maio."}],
+  "2026-05-18":[{type:"edu",title:"Edu: Impressão (Abr/Mai)"}],
+  "2026-05-29":[{type:"edu",title:"Edu: Registro (Abr/Mai)"}],
+  "2026-06-25":[{type:"edu",title:"Edu: Fechamento (Abr/Mai)"},{type:"sicon",title:"SICON: Recurso Mai/26"},{type:"interrupt",title:"Interrupt: Limite Jun"}],
+  "2026-07-15":[{type:"edu",title:"Edu: Impressão (Jun/Jul)"}],
+  "2026-07-31":[{type:"edu",title:"Edu: Registro (Jun/Jul)"},{type:"interrupt",title:"Interrupt: Limite Jul"}],
+  "2026-08-27":[{type:"edu",title:"Edu: Fechamento (Jun/Jul)"},{type:"sicon",title:"SICON: Recurso Jul/26"},{type:"interrupt",title:"Interrupt: Limite Ago"}],
+  "2026-09-14":[{type:"edu",title:"Edu: Impressão (Ago/Set)"}],
+  "2026-09-30":[{type:"edu",title:"Edu: Registro (Ago/Set)"},{type:"interrupt",title:"Interrupt: Limite Set"}],
+  "2026-10-29":[{type:"edu",title:"Edu: Fechamento (Ago/Set)"},{type:"sicon",title:"SICON: Recurso Set/26"},{type:"interrupt",title:"Interrupt: Limite Out"}],
+  "2026-11-16":[{type:"edu",title:"Edu: Impressão (Out/Nov)"}],
+  "2026-11-30":[{type:"edu",title:"Edu: Registro (Out/Nov)"},{type:"interrupt",title:"Interrupt: Limite Nov"}],
+  "2026-12-18":[{type:"edu",title:"Edu: Fechamento (Out/Nov)"}],
+  "2026-01-31":[{type:"interrupt",title:"Interrupt: Limite Jan"}],
+  "2026-02-28":[{type:"interrupt",title:"Interrupt: Limite Fev"}],
+  "2026-03-31":[{type:"interrupt",title:"Interrupt: Limite Mar"}],
+  "2026-05-31":[{type:"interrupt",title:"Interrupt: Limite Mai"}],
+  "2026-12-31":[{type:"interrupt",title:"Interrupt: Limite Dez"}]
+};
+
+const paymentCalendar = {
+  // Ordem das 10 colunas: NIS final 1,2,3,4,5,6,7,8,9,0 — nessa ordem.
+  0:[19,20,21,22,23,26,27,28,29,30],
+  1:[12,13,18,19,20,23,24,25,26,27],
+  2:[18,19,20,23,24,25,26,27,30,31],
+  3:[16,17,20,22,23,24,27,28,29,30],
+  4:[18,19,20,21,22,25,26,27,28,29],
+  5:[17,18,19,22,23,24,25,26,29,30],
+  6:[20,19,20,23,24,27,28,29,28,31],
+  7:[18,21,22,22,24,25,26,27,30,31],
+  8:[17,18,21,21,23,24,25,28,29,30],
+  9:[19,20,21,22,23,26,27,28,29,30],
+  10:[16,17,18,19,23,24,25,26,27,30],
+  11:[10,11,14,15,16,17,18,21,22,23]
+};
+/* ================= FIM DA ÁREA "EDITAR TODO INÍCIO DE ANO" ================= */
+
+const eventStyles = {
+  saude:{dot:"bg-emerald-500",text:"text-emerald-700",border:"border-emerald-500",bg:"bg-emerald-50",badge:"bg-emerald-100 text-emerald-800"},
+  edu:{dot:"bg-amber-500",text:"text-amber-700",border:"border-amber-500",bg:"bg-amber-50",badge:"bg-amber-100 text-amber-800"},
+  sicon:{dot:"bg-blue-600",text:"text-blue-700",border:"border-blue-600",bg:"bg-blue-50",badge:"bg-blue-100 text-blue-800"},
+  interrupt:{dot:"bg-purple-600",text:"text-purple-700",border:"border-purple-600",bg:"bg-purple-50",badge:"bg-purple-100 text-purple-800"}
+};
+
+// Abre sempre no dia correspondente à data atual do usuário.
+// Se a data atual estiver fora de ANO_VIGENTE (único ano com dados),
+// cai no limite mais próximo do ano (1º de janeiro ou 31 de dezembro).
+function getInitialDate(){
+  const today = new Date();
+  const year = today.getFullYear();
+  if (year < ANO_VIGENTE) return new Date(ANO_VIGENTE,0,1);
+  if (year > ANO_VIGENTE) return new Date(ANO_VIGENTE,11,31);
+  return new Date(ANO_VIGENTE, today.getMonth(), today.getDate());
+}
+
+let currentMonth = getInitialDate();
+let selectedDay = getInitialDate();
+
+function formatDate(d){ return `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getDate().toString().padStart(2,'0')}`; }
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function getNoteObj(notes, key){
+  const raw = notes[key];
+  if (!raw) return null;
+  return (typeof raw === 'string') ? { text: raw, emphasis: false } : raw;
+}
+
+function nisDigitIndex(){
+  const v = document.getElementById('nisInput').value.trim();
+  if (v === '') return null;
+  const n = parseInt(v,10);
+  if (isNaN(n) || n < 0 || n > 9) return null;
+  return n === 0 ? 9 : n - 1;
+}
+
+function paydayForMonth(monthIdx){
+  const idx = nisDigitIndex();
+  if (idx === null) return null;
+  const arr = paymentCalendar[monthIdx];
+  return arr ? arr[idx] : null;
+}
+
+function render(){
+  const grid = document.getElementById('calendarGrid');
+  const summary = document.getElementById('monthSummary');
+  grid.innerHTML = '';
+  const monthIdx = currentMonth.getMonth();
+  const year = currentMonth.getFullYear();
+
+  document.getElementById('currentMonthLabel').innerText =
+    new Intl.DateTimeFormat('pt-BR',{month:'long',year:'numeric'}).format(currentMonth);
+
+  const monthData = monthHighlights[monthIdx] || [];
+  const payday = paydayForMonth(monthIdx);
+  let summaryHtml = '';
+  if (payday) {
+    summaryHtml += `<div class="border-l-2 pl-3" style="border-color:var(--amarelo)">
+      <span class="badge" style="background:#FFE9A8;color:var(--amarelo-text);">Seu pagamento</span>
+      <h4 class="text-[11px] font-bold text-slate-800">Dia ${payday}</h4>
+      <p class="text-[10px] text-slate-500 mt-1">Data prevista para NIS final ${document.getElementById('nisInput').value}.</p>
+    </div>`;
+  }
+  if (monthData.length === 0 && !payday) {
+    summaryHtml += `<p class="text-[10px] text-slate-400 italic">Nenhuma atividade de longo prazo listada para este mês.</p>`;
+  } else {
+    summaryHtml += monthData.map(item => `
+      <div class="border-l-2 pl-3 ${eventStyles[item.type].border}">
+        <span class="badge ${eventStyles[item.type].badge}">${item.type}</span>
+        <h4 class="text-[11px] font-bold text-slate-800">${item.title}</h4>
+        <p class="text-[10px] text-slate-500 mt-1">${item.desc||''}</p>
+      </div>`).join('');
+  }
+  summary.innerHTML = summaryHtml;
+
+  const firstDay = new Date(year,monthIdx,1).getDay();
+  const daysInMonth = new Date(year,monthIdx+1,0).getDate();
+  const notes = window.__getNotes ? window.__getNotes() : {};
+
+  for (let i=0;i<firstDay;i++) grid.innerHTML += `<div class="day-cell empty"></div>`;
+
+  for (let day=1; day<=daysInMonth; day++){
+    const date = new Date(year,monthIdx,day);
+    const dateKey = formatDate(date);
+    const isSelected = formatDate(selectedDay) === dateKey;
+    const events = officialEvents[dateKey] || [];
+    const noteObj = getNoteObj(notes, dateKey);
+    const hasNote = !!(noteObj && noteObj.text);
+    const isPayday = payday === day;
+
+    const cell = document.createElement('div');
+    cell.className = `day-cell ${isSelected?'selected':''} ${isPayday?'payday':''}`;
+    cell.onclick = () => { selectedDay = date; render(); };
+
+    let bottomContent = '';
+    if (hasNote) {
+      bottomContent = `<div class="text-[7px] leading-tight truncate rounded px-1 ${noteObj.emphasis ? 'font-black' : ''}" style="${noteObj.emphasis ? 'background:var(--amarelo); color:var(--amarelo-text)' : 'color:var(--azul)'}">${escapeHtml(noteObj.text).slice(0,22)}</div>`;
+    } else if (isPayday) {
+      bottomContent = `<div class="text-[7px] font-bold uppercase truncate" style="color:var(--amarelo-text)">Pagamento</div>`;
+    } else if (events.length) {
+      bottomContent = `<div class="text-[7px] font-bold uppercase truncate ${eventStyles[events[0].type].text}">${(events[0].title.split(':')[1]||events[0].title)}</div>`;
+    }
+
+    cell.innerHTML = `
+      <div class="flex justify-between items-start relative z-10">
+        <span class="text-xs font-black ${isSelected?'':'text-slate-400'}" style="${isSelected?'color:var(--azul)':''}">${day}</span>
+        ${hasNote ? `<i data-lucide="${noteObj.emphasis?'star':'pin'}" class="w-2.5 h-2.5" style="color:${noteObj.emphasis?'var(--amarelo-text)':'var(--azul)'}"></i>` : ''}
+      </div>
+      <div class="mt-2 flex flex-wrap gap-1 relative z-10">
+        ${isPayday?'<div class="w-1.5 h-1.5 rounded-full" style="background:var(--amarelo)"></div>':''}
+        ${events.map(e=>`<div class="w-1.5 h-1.5 rounded-full ${eventStyles[e.type].dot}"></div>`).join('')}
+      </div>
+      <div class="mt-auto relative z-10">${bottomContent}</div>`;
+    grid.appendChild(cell);
+  }
+
+  if (window.lucide) lucide.createIcons();
+  updateDetails();
+  updateNav();
+}
+
+function updateDetails(){
+  const key = formatDate(selectedDay);
+  const events = officialEvents[key] || [];
+  const monthIdx = selectedDay.getMonth();
+  const payday = paydayForMonth(monthIdx);
+  const isPayday = payday === selectedDay.getDate();
+  const notes = window.__getNotes ? window.__getNotes() : {};
+  const noteObj = getNoteObj(notes, key);
+
+  document.getElementById('selectedDayBox').innerText = selectedDay.getDate().toString().padStart(2,'0');
+  document.getElementById('selectedFullDate').innerText = new Intl.DateTimeFormat('pt-BR',{day:'numeric',month:'long',year:'numeric'}).format(selectedDay);
+  document.getElementById('selectedDayName').innerText = new Intl.DateTimeFormat('pt-BR',{weekday:'long'}).format(selectedDay);
+
+  const list = document.getElementById('eventList');
+  let html = '';
+  if (isPayday) {
+    html += `<div class="p-3 rounded-xl border-l-4" style="border-color:var(--amarelo); background:#FFF8DF;">
+      <h4 class="text-xs font-black uppercase" style="color:var(--amarelo-text)">Dia de pagamento</h4>
+      <p class="text-[11px] text-slate-600 mt-1">Data prevista do Bolsa Família para NIS final ${document.getElementById('nisInput').value}.</p>
+    </div>`;
+  }
+  html += events.map(e=>`
+    <div class="p-3 rounded-xl border-l-4 ${eventStyles[e.type].border} ${eventStyles[e.type].bg}">
+      <h4 class="text-xs font-black ${eventStyles[e.type].text} uppercase">${e.title}</h4>
+      <p class="text-[10px] text-slate-600 mt-1">${e.desc || `Prazo oficial do calendário ${ANO_VIGENTE}.`}</p>
+    </div>`).join('');
+  list.innerHTML = html || `<p class="text-slate-400 text-xs italic">Nenhum prazo específico neste dia.</p>`;
+
+  document.getElementById('noteInput').value = noteObj ? noteObj.text : '';
+  document.getElementById('noteEmphasis').checked = noteObj ? !!noteObj.emphasis : false;
+  document.getElementById('noteStatus').innerText = '';
+}
+
+function changeMonth(offset){
+  const newM = new Date(currentMonth);
+  newM.setMonth(newM.getMonth()+offset);
+  if (newM.getFullYear() === ANO_VIGENTE) { currentMonth = newM; render(); }
+}
+
+function updateNav(){
+  document.getElementById('btnPrev').disabled = currentMonth.getMonth() === 0;
+  document.getElementById('btnNext').disabled = currentMonth.getMonth() === 11;
+}
+
+async function saveNote(){
+  const val = document.getElementById('noteInput').value.trim();
+  const emphasis = document.getElementById('noteEmphasis').checked;
+  const key = formatDate(selectedDay);
+  const statusEl = document.getElementById('noteStatus');
+  statusEl.innerText = 'Salvando…';
+  await window.__persistNote(key, val ? { text: val, emphasis } : null);
+  statusEl.innerText = 'Salvo ✓';
+  render();
+}
+
+async function exportNotesPDF(){
+  const { jsPDF } = window.jspdf;
+  const notes = window.__getNotes ? window.__getNotes() : {};
+  const filterVal = document.getElementById('pdfMonthFilter').value; // "all" ou "0".."11"
+  const monthNames = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  const keys = Object.keys(notes)
+    .filter(k => {
+      const n = getNoteObj(notes, k);
+      if (!n || !n.text) return false;
+      if (filterVal === 'all') return true;
+      const monthIdx = parseInt(k.split('-')[1], 10) - 1;
+      return monthIdx === parseInt(filterVal, 10);
+    })
+    .sort();
+
+  if (keys.length === 0){
+    alert(filterVal === 'all'
+      ? 'Você ainda não tem nenhuma anotação salva.'
+      : `Você não tem anotações em ${monthNames[parseInt(filterVal,10)]}.`);
+    return;
+  }
+
+  const subtitleText = filterVal === 'all'
+    ? `Anona · Bolsa Família ${ANO_VIGENTE} · Calendário & Notas`
+    : `Anona · Bolsa Família ${ANO_VIGENTE} · Anotações de ${monthNames[parseInt(filterVal,10)]}`;
+
+  const docPdf = new jsPDF({ unit:'pt', format:'a4' });
+  const pageW = docPdf.internal.pageSize.getWidth();
+  const pageH = docPdf.internal.pageSize.getHeight();
+  const margin = 48;
+  const azul = [11,47,122];
+  const azulDeep = [6,29,82];
+  const amarelo = [255,204,41];
+  const amareloText = [107,78,0];
+  const slate = [71,85,105];
+
+  function drawHeader(){
+    docPdf.setFillColor(...azulDeep);
+    docPdf.rect(0,0,pageW,90,'F');
+    docPdf.setFillColor(...amarelo);
+    docPdf.rect(0,90,pageW,4,'F');
+    docPdf.setTextColor(255,255,255);
+    docPdf.setFont('helvetica','bold');
+    docPdf.setFontSize(18);
+    docPdf.text('Minhas Anotações', margin, 40);
+    docPdf.setFontSize(10);
+    docPdf.setFont('helvetica','normal');
+    docPdf.text(subtitleText, margin, 58);
+    docPdf.setFontSize(9);
+    docPdf.setTextColor(200,215,255);
+    docPdf.text('Paulo Xavier · CRP-20/09816 · Psicólogo', margin, 74);
+    docPdf.setFontSize(9);
+    docPdf.setTextColor(255,255,255);
+    docPdf.text(
+      `Gerado em ${new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short'}).format(new Date())}`,
+      pageW - margin, 40, { align:'right' }
+    );
+  }
+
+  function drawFooter(pageNum, totalPages){
+    docPdf.setFontSize(8);
+    docPdf.setTextColor(...slate);
+    docPdf.text(`Página ${pageNum} de ${totalPages}`, pageW/2, pageH-20, { align:'center' });
+  }
+
+  let y = 120;
+  drawHeader();
+
+  keys.forEach((key) => {
+    const noteObj = getNoteObj(notes, key);
+    const d = new Date(key + 'T00:00:00');
+    const dateLabelRaw = new Intl.DateTimeFormat('pt-BR',{ day:'2-digit', month:'long', year:'numeric', weekday:'long'}).format(d);
+    const dateLabel = dateLabelRaw.charAt(0).toUpperCase() + dateLabelRaw.slice(1);
+
+    docPdf.setFont('helvetica','bold');
+    docPdf.setFontSize(10.5);
+    const lines = docPdf.splitTextToSize(noteObj.text, pageW - margin*2 - 20);
+    const blockHeight = 34 + lines.length*13;
+
+    if (y + blockHeight > pageH - 50){
+      docPdf.addPage();
+      drawHeader();
+      y = 120;
+    }
+
+    docPdf.setFillColor(...(noteObj.emphasis ? amarelo : azul));
+    docPdf.rect(margin, y-14, 4, blockHeight-8, 'F');
+
+    docPdf.setFont('helvetica','bold');
+    docPdf.setFontSize(10.5);
+    docPdf.setTextColor(...(noteObj.emphasis ? amareloText : azul));
+    const dateText = (noteObj.emphasis ? '★ ' : '') + dateLabel;
+    docPdf.text(dateText, margin+14, y);
+
+    docPdf.setFont('helvetica','normal');
+    docPdf.setFontSize(10);
+    docPdf.setTextColor(...slate);
+    docPdf.text(lines, margin+14, y+16);
+
+    y += blockHeight;
+  });
+
+  const totalPages = docPdf.internal.getNumberOfPages();
+  for (let p=1;p<=totalPages;p++){
+    docPdf.setPage(p);
+    drawFooter(p, totalPages);
+  }
+
+  docPdf.save(filterVal === 'all'
+    ? `minhas-anotacoes-bolsa-familia-${ANO_VIGENTE}.pdf`
+    : `minhas-anotacoes-${monthNames[parseInt(filterVal,10)].toLowerCase()}-${ANO_VIGENTE}.pdf`);
+}
+
+document.getElementById('nisInput').addEventListener('input', render);
+
+window.changeMonth = changeMonth;
+window.saveNote = saveNote;
+window.exportNotesPDF = exportNotesPDF;
+
+if (window.lucide) lucide.createIcons();
+render();
+
+// PWA — registro do service worker + atualização automática do app
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then((reg) => {
+      // Se já existe uma versão nova esperando (baixada antes), assume agora.
+      if (reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
+
+      // Quando uma versão nova do service worker terminar de instalar,
+      // manda ela assumir o controle na hora (sem esperar o usuário fechar
+      // e reabrir o app).
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            newWorker.postMessage('SKIP_WAITING');
+          }
+        });
+      });
+
+      // Toda vez que o app volta a ficar visível (usuário reabre a aba/app),
+      // verifica se existe uma versão mais nova do service worker publicada.
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update();
+      });
+    }).catch(()=>{});
+  });
+
+  // Quando a nova versão assume o controle da página, recarrega sozinho
+  // para exibir a versão mais recente do app.
+  let refreshingPage = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshingPage) return;
+    refreshingPage = true;
+    window.location.reload();
+  });
+}
+</script>
+
+</div><!-- fim #appContent -->
+
+<script>
+  // Tela de senha simples: só serve para impedir que alguém que ache o
+  // link abra o app sem saber a senha. Não é uma segurança "de verdade"
+  // (a senha fica escondida no código do site) — é só uma trava simples
+  // de acesso pessoal.
+  (function () {
+    const SENHA_CORRETA = "Paulus";
+    const CHAVE_LOCAL = "pbf_desbloqueado";
+
+    // Botão "Sair" no cabeçalho chama esta função: trava o app de novo,
+    // exigindo a senha na próxima vez (e também agora, na hora).
+    window.sairDoApp = function () {
+      localStorage.removeItem(CHAVE_LOCAL);
+      window.location.reload();
+    };
+
+    const lockScreen = document.getElementById('lockScreen');
+    const appContent = document.getElementById('appContent');
+    const lockForm = document.getElementById('lockForm');
+    const lockPass = document.getElementById('lockPass');
+    const lockError = document.getElementById('lockError');
+
+    function liberarApp() {
+      lockScreen.style.display = 'none';
+      appContent.style.display = '';
+      if (window.lucide) lucide.createIcons();
+    }
+
+    // Se já desbloqueou antes neste aparelho, não pede a senha de novo.
+    if (localStorage.getItem(CHAVE_LOCAL) === 'sim') {
+      liberarApp();
+    } else {
+      if (window.lucide) lucide.createIcons();
+      lockPass.focus();
+    }
+
+    lockForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (lockPass.value === SENHA_CORRETA) {
+        localStorage.setItem(CHAVE_LOCAL, 'sim');
+        liberarApp();
+      } else {
+        lockError.classList.remove('hidden');
+        lockPass.value = '';
+        lockPass.focus();
+      }
+    });
+  })();
+</script>
+</body>
+</html>
