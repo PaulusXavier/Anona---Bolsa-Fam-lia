@@ -146,6 +146,18 @@ Na barra lateral, bloco **"Território Volante — Divisão por técnico"**:
   - **Keomara Teles - Assistente Social** — 3ª parte (→Z).
 - Nada é guardado na nuvem nem no aparelho — é só enviar e baixar. O arquivo original enviado não é alterado.
 
+## 8.2 Relatório de Repercussão Individual
+
+Na barra lateral, bloco **"Relatório de Repercussão Individual"**:
+
+- Clique em **"Enviar tabela (.xlsx)"** e selecione qualquer tabela de condicionalidades que tenha uma coluna **"Efeito"** — pode ser o relatório bruto do MDS, a planilha já organizada por bairro (seção 8) ou a planilha dividida por técnico do Território Volante (seção 8.1), inclusive com todas as abas de técnicos juntas.
+- O app baixa na hora um **PDF** com:
+  - uma capa com o total de registros, o total de famílias distintas e a quantidade de cada efeito (Alerta, Bloqueio, Suspensão, Cancelamento...), além de um **gráfico de barras da quantidade de efeitos**;
+  - o detalhamento completo, registro por registro, logo em seguida.
+- **Todas as colunas ficam numa página só** (a página é mais larga, formato A3 deitado) — nada de colunas cortadas; já as **linhas continuam nas páginas seguintes** conforme necessário, com o cabeçalho da tabela repetido em cada página nova.
+- Colunas totalmente vazias na planilha original são descartadas automaticamente, para não ocupar espaço à toa.
+- Nada é guardado na nuvem nem no aparelho — é só enviar e baixar. O arquivo original enviado não é alterado.
+
 ## 9. Personalizando
 
 - Cores, textos e ícones: tudo está em `index.html` (é um arquivo único, fácil de editar).
