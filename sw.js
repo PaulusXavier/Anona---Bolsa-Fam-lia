@@ -1,15 +1,15 @@
 // Service worker: guarda o "esqueleto" do app (HTML, manifest, ícones) E as
-// bibliotecas externas usadas (Tailwind, ícones, jsPDF, fontes do Google)
-// para o app funcionar 100% OFFLINE depois da primeira vez que for aberto
-// com internet.
+// bibliotecas externas usadas (Tailwind, ícones, jsPDF, xlsx, fontes do
+// Google) para o app funcionar 100% OFFLINE depois da primeira vez que for
+// aberto com internet.
 //
 // Estratégia:
 // - Página (index.html): tenta buscar a versão mais nova na rede primeiro
 //   (para o app se atualizar sozinho quando você publica uma mudança);
 //   se não tiver internet, usa a cópia guardada.
 // - Arquivos do próprio site e bibliotecas externas confiáveis (Tailwind,
-//   unpkg, fontes Google): mostra a cópia guardada na hora (rápido/offline)
-//   e atualiza em segundo plano quando há internet.
+//   unpkg, jsdelivr, fontes Google): mostra a cópia guardada na hora
+//   (rápido/offline) e atualiza em segundo plano quando há internet.
 // - Chamadas do Firebase (login/notas) NÃO passam pelo cache — o próprio
 //   Firebase cuida da parte offline delas (fica guardado no IndexedDB).
 //
@@ -17,7 +17,7 @@
 // (trocou ícones, nomes de arquivo etc.), só mudar o número da versão
 // abaixo (v3 -> v4...). Para atualizações normais de conteúdo do
 // index.html isso NÃO é necessário.
-const CACHE_NAME = "pbf-app-shell-v4";
+const CACHE_NAME = "pbf-app-shell-v5";
 
 // Arquivos do próprio site.
 const SHELL_FILES = [
@@ -34,6 +34,7 @@ const EXTERNAL_FILES = [
   "https://cdn.tailwindcss.com",
   "https://unpkg.com/lucide@0.469.0",
   "https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js",
+  "https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js",
   "https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;0,600;0,700;1,600&family=Inter:wght@400;500;600;700;800&display=swap"
 ];
 
@@ -43,6 +44,7 @@ const EXTERNAL_FILES = [
 const RUNTIME_CACHEABLE_HOSTS = [
   "cdn.tailwindcss.com",
   "unpkg.com",
+  "cdn.jsdelivr.net",
   "fonts.googleapis.com",
   "fonts.gstatic.com"
 ];
