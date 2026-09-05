@@ -118,7 +118,7 @@ Toda vez que você editar `index.html` (ou qualquer arquivo) e subir a mudança 
 
 Ou seja: você só precisa subir os arquivos atualizados no GitHub — não precisa avisar os usuários nem pedir para reinstalar.
 
-**Exceção:** se um dia você trocar nomes de arquivos de ícones ou quiser forçar todo mundo a "limpar o cache" de uma vez (algo raro), edite o `sw.js` e troque `pbf-app-shell-v3` para `pbf-app-shell-v4` (ou outro número). Isso não é necessário para atualizações normais de texto, calendário ou visual do app.
+**Exceção:** se um dia você trocar nomes de arquivos de ícones ou quiser forçar todo mundo a "limpar o cache" de uma vez (algo raro), edite o `sw.js` e aumente em 1 o número no final de `CACHE_NAME` (ex: de `"pbf-app-shell-v5"` para `"pbf-app-shell-v6"`). Isso não é necessário para atualizações normais de texto, calendário ou visual do app.
 
 ## 8. Repercussão de Condicionalidades (planilhas do MDS)
 
