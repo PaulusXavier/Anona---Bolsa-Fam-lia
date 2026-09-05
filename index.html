@@ -215,6 +215,18 @@
     </div>
 
     <div class="panel-tool p-5">
+      <h2 class="eyebrow mb-3">
+        <span class="chip"><i data-lucide="file-text" class="w-4 h-4" style="color:var(--azul)"></i></span> Relatório de Repercussão Individual
+      </h2>
+      <p class="text-xs text-slate-500 mb-3">Envie a tabela de condicionalidades (com uma linha por integrante/efeito) e o app gera na hora um <strong>PDF</strong> com todos os registros e um gráfico da quantidade de efeitos.</p>
+      <label class="w-full flex items-center justify-center gap-2 border-2 border-dashed rounded-xl py-3 text-xs font-bold cursor-pointer hover:bg-slate-50" style="border-color:var(--azul); color:var(--azul)">
+        <i data-lucide="upload" class="w-4 h-4"></i> Enviar tabela (.xlsx)
+        <input type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="__handleRelatorioIndividualUpload(this)">
+      </label>
+      <p class="text-[10px] text-slate-400 mt-2">Todas as colunas ficam numa página só (na horizontal); as linhas continuam nas páginas seguintes. Nada é guardado — o arquivo original não é alterado.</p>
+    </div>
+
+    <div class="panel-tool p-5">
       <h2 class="eyebrow mb-4">
         <span class="chip"><i data-lucide="info" class="w-4 h-4" style="color:var(--azul)"></i></span> Destaques do mês
       </h2>
@@ -963,6 +975,296 @@
     } catch (e) {
       console.error(e);
       alert('Não consegui dividir esta tabela. Confirme se a primeira linha tem os títulos das colunas e se há famílias nas linhas seguintes.');
+      input.value = '';
+    }
+  };
+
+  // =====================================================================
+  // RELATÓRIO DE REPERCUSSÃO INDIVIDUAL — gera um PDF (todas as colunas
+  // numa página só, na horizontal; as linhas continuam nas páginas
+  // seguintes) com um gráfico da quantidade de efeitos (Alerta, Bloqueio,
+  // Suspensão, Cancelamento...). Aceita qualquer planilha de condicionalidades
+  // com uma coluna "Efeito" (ex.: o relatório bruto do MDS ou a planilha já
+  // dividida por técnico do Território Volante) — nada é guardado.
+  // =====================================================================
+
+  function relatorioIndividualDetectarCabecalho(rows) {
+    for (let i = 0; i < Math.min(rows.length, 25); i++) {
+      const labels = rows[i].map(v => normalizeText(v));
+      if (labels.includes('efeito') && labels.some(l => l.includes('nome'))) return i;
+    }
+    for (let i = 0; i < Math.min(rows.length, 25); i++) {
+      const labels = rows[i].map(v => normalizeText(v));
+      if (labels.includes('efeito')) return i;
+    }
+    return -1;
+  }
+
+  // Lê o workbook inteiro e junta, num só conjunto de dados, todas as abas
+  // que tiverem uma coluna "Efeito" (ignora abas de resumo). Os cabeçalhos
+  // são unificados pelo nome (uma aba pode ter colunas a mais ou a menos
+  // que outra — cada linha é encaixada nas colunas certas pelo nome).
+  function relatorioIndividualExtrairDados(base64) {
+    const wb = XLSX.read(bytesFromBase64(base64), {type:'array'});
+    let headerGlobal = [];
+    const headerIndexGlobal = new Map(); // normalizado -> posição em headerGlobal
+    const linhas = [];
+
+    function registrarColuna(nomeOriginal) {
+      const norm = normalizeText(nomeOriginal);
+      if (!headerIndexGlobal.has(norm)) {
+        headerIndexGlobal.set(norm, headerGlobal.length);
+        headerGlobal.push(String(nomeOriginal || '').trim());
+      }
+      return headerIndexGlobal.get(norm);
+    }
+
+    wb.SheetNames.forEach(sheetName => {
+      if (normalizeText(sheetName).startsWith('resumo')) return;
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, defval:''});
+      const headerIndex = relatorioIndividualDetectarCabecalho(rows);
+      if (headerIndex < 0) return;
+      const header = rows[headerIndex];
+      const posicoes = header.map(h => registrarColuna(h));
+      rows.slice(headerIndex + 1).forEach(row => {
+        if (!row.some(v => String(v).trim() !== '')) return;
+        linhas.push({ posicoes, valores: row });
+      });
+    });
+
+    if (!headerGlobal.length || !linhas.length) return null;
+
+    const dataRowsBrutas = linhas.map(({posicoes, valores}) => {
+      const linha = new Array(headerGlobal.length).fill('');
+      posicoes.forEach((destino, origem) => { linha[destino] = valores[origem] != null ? valores[origem] : ''; });
+      return linha;
+    });
+
+    // Descarta colunas totalmente vazias em todas as linhas (ex.: colunas
+    // em branco que às vezes aparecem entre blocos do relatório original).
+    const colunasComDado = headerGlobal.map((_, i) => dataRowsBrutas.some(r => String(r[i] ?? '').trim() !== ''));
+    const headers = headerGlobal.filter((_, i) => colunasComDado[i]);
+    const dataRows = dataRowsBrutas.map(r => r.filter((_, i) => colunasComDado[i]));
+
+    return { headers, rows: dataRows };
+  }
+
+  function relatorioIndividualGerarPDF(headers, dataRows) {
+    const { jsPDF } = window.jspdf;
+    const idxEfeito = headers.findIndex(h => normalizeText(h) === 'efeito');
+    const idxNome = headers.findIndex(h => normalizeText(h).includes('nome') && normalizeText(h).includes('responsavel'));
+    const idxMes = headers.findIndex(h => normalizeText(h).includes('mes') && normalizeText(h).includes('repercuss'));
+
+    const contagem = {};
+    dataRows.forEach(r => {
+      const v = idxEfeito >= 0 ? String(r[idxEfeito] || '').trim() : '';
+      if (v) contagem[v] = (contagem[v] || 0) + 1;
+    });
+    const ordemPref = ['Alerta','Bloqueio','Suspensão','Cancelamento'];
+    const labelsEf = Object.keys(contagem).sort((a,b) => {
+      const ia = ordemPref.indexOf(a), ib = ordemPref.indexOf(b);
+      if (ia < 0 && ib < 0) return a.localeCompare(b,'pt-BR');
+      if (ia < 0) return 1; if (ib < 0) return -1; return ia - ib;
+    });
+    const totalRegistros = dataRows.length;
+    const totalFamilias = idxNome >= 0 ? new Set(dataRows.map(r => String(r[idxNome] || '').trim()).filter(Boolean)).size : totalRegistros;
+    const mesTexto = idxMes >= 0 ? (dataRows.map(r => String(r[idxMes] || '').trim()).find(Boolean) || '—') : '—';
+
+    const docPdf = new jsPDF({ unit:'pt', format:'a3', orientation:'landscape' });
+    const pageW = docPdf.internal.pageSize.getWidth();
+    const pageH = docPdf.internal.pageSize.getHeight();
+    const margin = 26;
+    const azul = [11,47,122], azulDeep = [6,29,82], amarelo = [255,204,41], amareloText = [107,78,0],
+          vermelho = [179,38,30], slate = [71,85,105], zebra = [238,243,251];
+    const barCores = { alerta:amarelo, bloqueio:vermelho, suspensao:azul, cancelamento:azulDeep };
+    const badgeCores = {
+      alerta: { bg:[255,246,218], fg:amareloText },
+      bloqueio: { bg:[251,231,230], fg:vermelho },
+      suspensao: { bg:[231,236,251], fg:azul },
+      cancelamento: { bg:[226,232,240], fg:slate }
+    };
+    const chaveEfeito = label => normalizeText(label).replace(/[^a-z]/g,'');
+
+    function drawTopBar() {
+      docPdf.setFillColor(...azulDeep);
+      docPdf.rect(0,0,pageW,52,'F');
+      docPdf.setFillColor(...amarelo);
+      docPdf.rect(0,52,pageW,3,'F');
+      docPdf.setTextColor(255,255,255);
+      docPdf.setFont('helvetica','bold'); docPdf.setFontSize(14);
+      docPdf.text('Anona · Relatório de Repercussão Individual', margin, 24);
+      docPdf.setFont('helvetica','normal'); docPdf.setFontSize(8.5);
+      docPdf.setTextColor(200,215,255);
+      docPdf.text('CRAS Cristiana Vicente Nunes · SEMADS · Paulo Xavier, Psicólogo, CRP-20/09816', margin, 38);
+      docPdf.setTextColor(255,255,255);
+      docPdf.text(`Repercussão de ${mesTexto}`, pageW-margin, 24, {align:'right'});
+      docPdf.setTextColor(200,215,255);
+      docPdf.text(`Gerado em ${new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short'}).format(new Date())}`, pageW-margin, 38, {align:'right'});
+    }
+
+    // ---------- página de capa: resumo + gráfico ----------
+    drawTopBar();
+    let y = 96;
+    docPdf.setFont('helvetica','bold'); docPdf.setFontSize(20); docPdf.setTextColor(...azul);
+    docPdf.text('Relatório de Repercussão Individual', margin, y);
+    y += 20;
+    docPdf.setFont('helvetica','normal'); docPdf.setFontSize(10.5); docPdf.setTextColor(...slate);
+    docPdf.text(`Bolsa Família · Repercussão de ${mesTexto} · CRAS Cristiana Vicente Nunes`, margin, y);
+    y += 26;
+
+    const cardLabels = ['Total de registros','Famílias distintas', ...labelsEf];
+    const cardValues = [totalRegistros, totalFamilias, ...labelsEf.map(l => contagem[l])];
+    const cardGap = 6;
+    const cardW = (pageW - margin*2) / cardLabels.length;
+    cardLabels.forEach((label,i) => {
+      const x = margin + i*cardW;
+      docPdf.setFillColor(...azul);
+      docPdf.rect(x, y, cardW-cardGap, 24, 'F');
+      docPdf.setTextColor(255,255,255); docPdf.setFont('helvetica','bold'); docPdf.setFontSize(9);
+      docPdf.text(String(label), x+(cardW-cardGap)/2, y+16, {align:'center'});
+      docPdf.setFillColor(...zebra);
+      docPdf.rect(x, y+24, cardW-cardGap, 34, 'F');
+      docPdf.setTextColor(...azulDeep); docPdf.setFont('helvetica','bold'); docPdf.setFontSize(17);
+      docPdf.text(String(cardValues[i]), x+(cardW-cardGap)/2, y+48, {align:'center'});
+    });
+    y += 24+34+30;
+
+    // gráfico de barras — quantidade de efeitos
+    docPdf.setFont('helvetica','bold'); docPdf.setFontSize(13); docPdf.setTextColor(...azul);
+    docPdf.text(`Quantidade de efeitos — Repercussão de ${mesTexto}`, pageW/2, y, {align:'center'});
+    y += 22;
+    if (labelsEf.length) {
+      const chartH = 170, chartW = Math.min(600, pageW-margin*2-260);
+      const chartX = pageW/2 - chartW/2;
+      const chartTop = y;
+      const maxVal = Math.max(1, ...labelsEf.map(l => contagem[l]));
+      const barGap = 34;
+      const barW = (chartW - barGap*(labelsEf.length-1)) / labelsEf.length;
+      docPdf.setDrawColor(203,213,225);
+      docPdf.line(chartX, chartTop+chartH, chartX+chartW, chartTop+chartH);
+      labelsEf.forEach((label,i) => {
+        const val = contagem[label];
+        const barH = (val/maxVal) * (chartH-24);
+        const bx = chartX + i*(barW+barGap);
+        const by = chartTop + chartH - barH;
+        const cor = barCores[chaveEfeito(label)] || slate;
+        docPdf.setFillColor(...cor);
+        docPdf.rect(bx, by, barW, barH, 'F');
+        docPdf.setFont('helvetica','bold'); docPdf.setFontSize(12); docPdf.setTextColor(...azulDeep);
+        docPdf.text(String(val), bx+barW/2, by-8, {align:'center'});
+        docPdf.setFont('helvetica','normal'); docPdf.setFontSize(9.5); docPdf.setTextColor(...slate);
+        docPdf.text(String(label), bx+barW/2, chartTop+chartH+16, {align:'center'});
+      });
+      y = chartTop + chartH + 42;
+    }
+    docPdf.setFont('helvetica','bold'); docPdf.setFontSize(12); docPdf.setTextColor(...azul);
+    docPdf.text('Detalhamento por registro (próxima página)', margin, y);
+
+    // ---------- páginas da tabela ----------
+    const usableWidth = pageW - margin*2;
+    const fontData = 6.2, fontHeader = 6.6, lineH = 7.4, cellPad = 3, minRowH = 13, minColW = 26;
+
+    const weights = headers.map((h,i) => {
+      let largest = String(h||'').length;
+      dataRows.forEach(r => { const len = String(r[i] ?? '').length; if (len > largest) largest = len; });
+      return Math.min(largest, 40);
+    });
+    const totalWeight = weights.reduce((a,b) => a+b, 0) || 1;
+    const rawWidths = weights.map(w => Math.max(minColW, usableWidth * (w/totalWeight)));
+    const scale = usableWidth / rawWidths.reduce((a,b)=>a+b,0);
+    const colWidths = rawWidths.map(w => w*scale);
+    const colX = []; let acc = margin; colWidths.forEach(w => { colX.push(acc); acc += w; });
+
+    function drawTableHeader(yStart) {
+      docPdf.setFont('helvetica','bold'); docPdf.setFontSize(fontHeader);
+      const linesPerCol = headers.map((h,i) => docPdf.splitTextToSize(String(h), colWidths[i]-cellPad*2));
+      const maxLines = Math.max(1, ...linesPerCol.map(l => l.length));
+      const rowH = maxLines*lineH + cellPad*2;
+      docPdf.setFillColor(...azulDeep);
+      docPdf.rect(margin, yStart, usableWidth, rowH, 'F');
+      docPdf.setFillColor(...amarelo);
+      docPdf.rect(margin, yStart+rowH-1.2, usableWidth, 1.2, 'F');
+      docPdf.setTextColor(255,255,255);
+      linesPerCol.forEach((lines,i) => {
+        const cx = colX[i] + colWidths[i]/2;
+        lines.forEach((line,li) => docPdf.text(line, cx, yStart+cellPad+lineH*(li+0.75), {align:'center'}));
+      });
+      return yStart + rowH;
+    }
+
+    docPdf.addPage();
+    drawTopBar();
+    let ty = drawTableHeader(66);
+
+    dataRows.forEach((row, rIdx) => {
+      docPdf.setFont('helvetica','normal'); docPdf.setFontSize(fontData);
+      const efeitoVal = idxEfeito >= 0 ? String(row[idxEfeito] || '').trim() : '';
+      const badge = badgeCores[chaveEfeito(efeitoVal)];
+      const linesPerCol = headers.map((h,i) => {
+        const bold = i === idxNome;
+        docPdf.setFont('helvetica', bold ? 'bold' : 'normal');
+        return docPdf.splitTextToSize(String(row[i] ?? ''), colWidths[i]-cellPad*2);
+      });
+      const maxLines = Math.max(1, ...linesPerCol.map(l => l.length));
+      const rowH = Math.max(minRowH, maxLines*lineH + cellPad*2);
+
+      if (ty + rowH > pageH - 34) {
+        docPdf.addPage();
+        drawTopBar();
+        ty = drawTableHeader(66);
+      }
+
+      docPdf.setFillColor(...(rIdx % 2 === 0 ? [255,255,255] : zebra));
+      docPdf.rect(margin, ty, usableWidth, rowH, 'F');
+      if (badge && idxEfeito >= 0) {
+        docPdf.setFillColor(...badge.bg);
+        docPdf.rect(colX[idxEfeito], ty, colWidths[idxEfeito], rowH, 'F');
+      }
+      docPdf.setDrawColor(217,224,240);
+      docPdf.rect(margin, ty, usableWidth, rowH, 'S');
+
+      linesPerCol.forEach((lines,i) => {
+        const bold = i === idxNome;
+        docPdf.setFont('helvetica', bold ? 'bold' : 'normal');
+        if (i === idxEfeito && badge) docPdf.setTextColor(...badge.fg);
+        else if (bold) docPdf.setTextColor(...azul);
+        else docPdf.setTextColor(31,41,55);
+        lines.forEach((line,li) => docPdf.text(line, colX[i]+cellPad, ty+cellPad+lineH*(li+0.72)));
+      });
+      ty += rowH;
+    });
+
+    const totalPages = docPdf.internal.getNumberOfPages();
+    for (let p=1;p<=totalPages;p++){
+      docPdf.setPage(p);
+      docPdf.setFont('helvetica','normal'); docPdf.setFontSize(8);
+      docPdf.setTextColor(...slate);
+      docPdf.text(`Página ${p} de ${totalPages}`, pageW/2, pageH-16, {align:'center'});
+    }
+
+    const nomeArquivo = `Relatorio Repercussao Individual - ${mesTexto.replace(/\//g,'-')}.pdf`;
+    docPdf.save(nomeArquivo);
+  }
+
+  window.__handleRelatorioIndividualUpload = async (input) => {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) {
+      alert('Esse arquivo está grande demais (acima de 8 MB).');
+      input.value = '';
+      return;
+    }
+    try {
+      if (!window.XLSX) throw new Error('Biblioteca de planilhas não carregada.');
+      if (!window.jspdf) throw new Error('Biblioteca de PDF não carregada.');
+      const base64 = await fileToBase64(file);
+      const dados = relatorioIndividualExtrairDados(base64);
+      if (!dados) throw new Error('Não encontrei a coluna "Efeito" em nenhuma aba desta planilha.');
+      relatorioIndividualGerarPDF(dados.headers, dados.rows);
+      input.value = '';
+    } catch (e) {
+      console.error(e);
+      alert('Não consegui gerar o relatório. Confirme se a planilha tem uma coluna "Efeito" e a primeira linha (ou uma das primeiras) com os títulos das colunas.');
       input.value = '';
     }
   };
