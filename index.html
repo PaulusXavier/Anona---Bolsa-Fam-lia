@@ -33,6 +33,23 @@
     background-image:
       radial-gradient(circle at 1px 1px, rgba(11,47,122,.06) 1px, transparent 0);
     background-size:22px 22px;
+    position:relative;
+  }
+  /* ---------- marca d'água de fundo: selo casa + coração + família ----------
+     Ilustração própria do app (não é foto/logo de terceiros), representando o
+     tema do Bolsa Família — moradia, cuidado e apoio à família. Fica fixa e
+     bem sutil (baixa opacidade) atrás dos painéis, sem atrapalhar a leitura. */
+  body::before{
+    content:"";
+    position:fixed;
+    inset:0;
+    z-index:-1;
+    pointer-events:none;
+    background-image:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MDAgNDIwIj4KICA8ZyBmaWxsPSJub25lIiBzdHJva2U9IiMwQjJGN0EiIHN0cm9rZS13aWR0aD0iNyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBvcGFjaXR5PSIxIj4KICAgIDwhLS0gc2VsbyBjaXJjdWxhciAtLT4KICAgIDxjaXJjbGUgY3g9IjIwMCIgY3k9IjIxMCIgcj0iMTg1IiBzdHJva2Utd2lkdGg9IjQiIHN0cm9rZS1kYXNoYXJyYXk9IjIgMTAiLz4KICAgIDwhLS0gY2FzYSAtLT4KICAgIDxwYXRoIGQ9Ik0xMTAgMjA1IEwyMDAgMTI1IEwyOTAgMjA1Ii8+CiAgICA8cGF0aCBkPSJNMTMyIDE5NiBWMzAwIEgyNjggVjE5NiIvPgogICAgPHBhdGggZD0iTTE3OCAzMDAgVjI0NSBIMjIyIFYzMDAiLz4KICA8L2c+CiAgPCEtLSBjb3JhY2FvIG5vIHRlbGhhZG8gZGEgY2FzYSAtLT4KICA8cGF0aCBkPSJNMjAwIDE2NQogICAgICAgICAgIEMgMTkyIDE1MCwgMTY4IDE1NSwgMTY4IDE3NQogICAgICAgICAgIEMgMTY4IDE5NSwgMjAwIDIxOCwgMjAwIDIxOAogICAgICAgICAgIEMgMjAwIDIxOCwgMjMyIDE5NSwgMjMyIDE3NQogICAgICAgICAgIEMgMjMyIDE1NSwgMjA4IDE1MCwgMjAwIDE2NSBaIgogICAgICAgIGZpbGw9IiNGRkNDMjkiIHN0cm9rZT0ibm9uZSIvPgogIDwhLS0gZmFtaWxpYSBkZSBtYW9zIGRhZGFzLCBlbWJhaXhvIGRhIGNhc2EgLS0+CiAgPGcgc3Ryb2tlPSIjMTU5OTQ3IiBzdHJva2Utd2lkdGg9IjciIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgZmlsbD0ibm9uZSI+CiAgICA8Y2lyY2xlIGN4PSIxNTAiIGN5PSIzNDAiIHI9IjE1Ii8+CiAgICA8cGF0aCBkPSJNMTUwIDM1NiBWMzkyIi8+CiAgICA8cGF0aCBkPSJNMTUwIDM3MCBMMTI4IDM4NiIvPgogICAgPHBhdGggZD0iTTE1MCAzNzAgTDE3MiAzODQiLz4KCiAgICA8Y2lyY2xlIGN4PSIyMDAiIGN5PSIzMjgiIHI9IjEyIi8+CiAgICA8cGF0aCBkPSJNMjAwIDM0MSBWMzkyIi8+CiAgICA8cGF0aCBkPSJNMjAwIDM2MCBMMTcyIDM4NCIvPgogICAgPHBhdGggZD0iTTIwMCAzNjAgTDIyOCAzODQiLz4KCiAgICA8Y2lyY2xlIGN4PSIyNTAiIGN5PSIzNDAiIHI9IjE1Ii8+CiAgICA8cGF0aCBkPSJNMjUwIDM1NiBWMzkyIi8+CiAgICA8cGF0aCBkPSJNMjUwIDM3MCBMMjcyIDM4NiIvPgogICAgPHBhdGggZD0iTTI1MCAzNzAgTDIyOCAzODQiLz4KICA8L2c+Cjwvc3ZnPgo=");
+    background-repeat:no-repeat;
+    background-position:center 14%;
+    background-size:min(80vw, 560px) auto;
+    opacity:.055;
   }
   .display{ font-family:'Fraunces',serif; font-optical-sizing:auto; letter-spacing:-.01em; }
   .flag-ribbon{ height:5px; background:linear-gradient(90deg, var(--verde) 0 33%, var(--amarelo) 33% 66%, var(--azul) 66% 100%); }
@@ -114,6 +131,8 @@
 <!-- HEADER -->
 <header class="text-white shadow-lg relative overflow-hidden" style="background:linear-gradient(165deg,var(--azul-deep),var(--azul) 65%,var(--azul-deep));">
   <div class="absolute inset-0 pointer-events-none" style="background-image:radial-gradient(circle at 1px 1px, rgba(255,255,255,.08) 1px, transparent 0); background-size:18px 18px;"></div>
+  <!-- selo casa + coracao + familia (ilustracao propria, tema Bolsa Familia) -->
+  <div class="header-seal pointer-events-none" aria-hidden="true" style="background-image:url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MDAgNDIwIj4KICA8ZyBmaWxsPSJub25lIiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj4KICAgIDxjaXJjbGUgY3g9IjIwMCIgY3k9IjIxMCIgcj0iMTg1IiBzdHJva2Utd2lkdGg9IjQiIHN0cm9rZS1kYXNoYXJyYXk9IjIgMTEiLz4KICAgIDxwYXRoIGQ9Ik0xMTAgMjA1IEwyMDAgMTI1IEwyOTAgMjA1Ii8+CiAgICA8cGF0aCBkPSJNMTMyIDE5NiBWMzAwIEgyNjggVjE5NiIvPgogICAgPHBhdGggZD0iTTE3OCAzMDAgVjI0NSBIMjIyIFYzMDAiLz4KICA8L2c+CiAgPHBhdGggZD0iTTIwMCAxNjUKICAgICAgICAgICBDIDE5MiAxNTAsIDE2OCAxNTUsIDE2OCAxNzUKICAgICAgICAgICBDIDE2OCAxOTUsIDIwMCAyMTgsIDIwMCAyMTgKICAgICAgICAgICBDIDIwMCAyMTgsIDIzMiAxOTUsIDIzMiAxNzUKICAgICAgICAgICBDIDIzMiAxNTUsIDIwOCAxNTAsIDIwMCAxNjUgWiIKICAgICAgICBmaWxsPSIjRkZDQzI5IiBzdHJva2U9Im5vbmUiLz4KICA8ZyBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBmaWxsPSJub25lIj4KICAgIDxjaXJjbGUgY3g9IjE1MCIgY3k9IjM0MCIgcj0iMTUiLz4KICAgIDxwYXRoIGQ9Ik0xNTAgMzU2IFYzOTIiLz4KICAgIDxwYXRoIGQ9Ik0xNTAgMzcwIEwxMjggMzg2Ii8+CiAgICA8cGF0aCBkPSJNMTUwIDM3MCBMMTcyIDM4NCIvPgoKICAgIDxjaXJjbGUgY3g9IjIwMCIgY3k9IjMyOCIgcj0iMTIiLz4KICAgIDxwYXRoIGQ9Ik0yMDAgMzQxIFYzOTIiLz4KICAgIDxwYXRoIGQ9Ik0yMDAgMzYwIEwxNzIgMzg0Ii8+CiAgICA8cGF0aCBkPSJNMjAwIDM2MCBMMjI4IDM4NCIvPgoKICAgIDxjaXJjbGUgY3g9IjI1MCIgY3k9IjM0MCIgcj0iMTUiLz4KICAgIDxwYXRoIGQ9Ik0yNTAgMzU2IFYzOTIiLz4KICAgIDxwYXRoIGQ9Ik0yNTAgMzcwIEwyNzIgMzg2Ii8+CiAgICA8cGF0aCBkPSJNMjUwIDM3MCBMMjI4IDM4NCIvPgogIDwvZz4KPC9zdmc+Cg==');"></div>
   <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-3 relative">
     <div class="flex items-center gap-3">
       <div class="bg-white/10 p-2 rounded-xl"><i data-lucide="calendar-heart" class="w-6 h-6" style="color:var(--amarelo)"></i></div>
@@ -1102,6 +1121,86 @@
     return { headers: headersFinais, rows: dataRowsFinais };
   }
 
+  // ---------------------------------------------------------------------
+  // Organização por ROTA DE VISITA — agrupa as famílias em blocos por
+  // BAIRRO (para o técnico visitar um bairro inteiro antes de ir para o
+  // outro, sem ficar indo e voltando) e, dentro de cada bairro, ordena por
+  // rua e depois pelo número do endereço (para seguir cada rua em
+  // sequência). O ponto de partida (Rua Santo Agostinho, 193 —
+  // Centenário) é só uma referência mostrada no relatório.
+  // Para adicionar/ajustar bairros, edite ROTA_BLOCOS_DEF abaixo.
+  // ---------------------------------------------------------------------
+  const ROTA_PARTIDA = 'Rua Santo Agostinho, 193 — Centenário';
+  const ROTA_BLOCOS_DEF = [
+    { chaves: ['13 de setembro', 'marechal rondon'], label: 'Bloco 1 · Bairro 13 de Setembro / Marechal Rondon' },
+    { chaves: ['araceli', 'nova vida'],               label: 'Bloco 2 · Bairro Araceli / Nova Vida' }
+  ];
+  const ROTA_OUTROS_LABEL = 'Outros bairros';
+
+  // Texto usado para IDENTIFICAR o bairro (prioriza a coluna Bairro; se
+  // ela não existir na planilha enviada, cai para Endereço/Referência).
+  function relatorioIndividualTextoBairro(row, idxEndereco, idxBairro, idxRef) {
+    if (idxBairro >= 0 && String(row[idxBairro] || '').trim()) return row[idxBairro];
+    return [idxEndereco, idxRef].map(i => (i >= 0 ? row[i] : '')).join(' ');
+  }
+
+  // Retorna o índice do bloco em ROTA_BLOCOS_DEF (0, 1, ...) ou
+  // ROTA_BLOCOS_DEF.length para "outros bairros" (não bate com nenhum
+  // bairro configurado). Cada bloco pode reunir mais de um nome de bairro
+  // (ex.: Marechal Rondon faz parte do mesmo bloco/rota que 13 de
+  // Setembro, e Nova Vida do mesmo bloco/rota que Araceli).
+  function relatorioIndividualClassificarBloco(textoBairro) {
+    const norm = normalizeText(textoBairro);
+    for (let i = 0; i < ROTA_BLOCOS_DEF.length; i++) {
+      if (ROTA_BLOCOS_DEF[i].chaves.some(chave => norm.includes(normalizeText(chave)))) return i;
+    }
+    return ROTA_BLOCOS_DEF.length;
+  }
+
+  // Nome da rua (endereço sem o número) — usado para agrupar visitas da
+  // mesma rua juntas dentro de um bairro.
+  function relatorioIndividualNomeRua(textoEndereco) {
+    return normalizeText(textoEndereco).replace(/\d+/g, '').replace(/\s+/g, ' ').trim();
+  }
+
+  // Extrai o número do imóvel (primeiro número encontrado no endereço) para
+  // ordenar as visitas em sequência dentro da mesma rua.
+  function relatorioIndividualNumeroEndereco(textoEndereco) {
+    const m = String(textoEndereco || '').match(/\d+/);
+    return m ? parseInt(m[0], 10) : Number.MAX_SAFE_INTEGER;
+  }
+
+  // Reordena as linhas por melhor rota de visita: bloco de bairro a bloco
+  // de bairro (na ordem definida em ROTA_BLOCOS_DEF, com "outros bairros"
+  // por último) e, dentro do bairro, por rua (alfabética) e depois pelo
+  // número do endereço.
+  function relatorioIndividualOrdenarPorRota(headers, dataRows) {
+    const idxEndereco = headers.findIndex(h => normalizeText(h) === 'endereco');
+    const idxBairro = headers.findIndex(h => normalizeText(h) === 'bairro');
+    const idxRef = headers.findIndex(h => normalizeText(h).includes('referencia') && normalizeText(h).includes('endereco'));
+
+    const enriquecidas = dataRows.map((row, i) => {
+      const textoBairro = relatorioIndividualTextoBairro(row, idxEndereco, idxBairro, idxRef);
+      const textoEndereco = idxEndereco >= 0 ? row[idxEndereco] : textoBairro;
+      return {
+        row,
+        i,
+        bloco: relatorioIndividualClassificarBloco(textoBairro),
+        rua: relatorioIndividualNomeRua(textoEndereco),
+        numero: relatorioIndividualNumeroEndereco(textoEndereco)
+      };
+    });
+
+    enriquecidas.sort((a, b) => {
+      if (a.bloco !== b.bloco) return a.bloco - b.bloco;
+      if (a.rua !== b.rua) return a.rua.localeCompare(b.rua, 'pt-BR');
+      if (a.numero !== b.numero) return a.numero - b.numero;
+      return a.i - b.i; // mantém ordem original como desempate
+    });
+
+    return enriquecidas.map(e => ({ row: e.row, bloco: e.bloco }));
+  }
+
   function relatorioIndividualGerarPDF(headers, dataRows) {
     const { jsPDF } = window.jspdf;
     const idxEfeito = headers.findIndex(h => normalizeText(h) === 'efeito');
@@ -1122,6 +1221,13 @@
     const totalRegistros = dataRows.length;
     const totalFamilias = idxNome >= 0 ? new Set(dataRows.map(r => String(r[idxNome] || '').trim()).filter(Boolean)).size : totalRegistros;
     const mesTexto = idxMes >= 0 ? (dataRows.map(r => String(r[idxMes] || '').trim()).find(Boolean) || '—') : '—';
+
+    // Ordena as famílias pela melhor rota de visita (bloco por bairro, na
+    // ordem 13 de Setembro -> Araceli -> outros bairros; dentro de cada
+    // bairro, por rua e depois por numeração crescente do imóvel).
+    const linhasRota = relatorioIndividualOrdenarPorRota(headers, dataRows);
+    const blocoLabels = ROTA_BLOCOS_DEF.map(b => b.label).concat([ROTA_OUTROS_LABEL]);
+    const blocoContagem = blocoLabels.map((_, bi) => linhasRota.filter(l => l.bloco === bi).length);
 
     const docPdf = new jsPDF({ unit:'pt', format:'a3', orientation:'landscape' });
     const pageW = docPdf.internal.pageSize.getWidth();
@@ -1210,6 +1316,23 @@
       });
       y = chartTop + chartH + 42;
     }
+
+    // ---------- resumo da rota de visita ----------
+    docPdf.setFont('helvetica','bold'); docPdf.setFontSize(13); docPdf.setTextColor(...azul);
+    docPdf.text('Rota sugerida para as visitas', margin, y);
+    y += 18;
+    docPdf.setFont('helvetica','normal'); docPdf.setFontSize(9.5); docPdf.setTextColor(...slate);
+    docPdf.text(`Partida: ${ROTA_PARTIDA}`, margin, y);
+    y += 16;
+    blocoLabels.forEach((label, bi) => {
+      docPdf.setFillColor(...azul);
+      docPdf.circle(margin+4, y-3, 4, 'F');
+      docPdf.setFont('helvetica','bold'); docPdf.setFontSize(9.5); docPdf.setTextColor(...azulDeep);
+      docPdf.text(`${label} — ${blocoContagem[bi]} registro${blocoContagem[bi]===1?'':'s'}`, margin+14, y);
+      y += 15;
+    });
+    y += 9;
+
     docPdf.setFont('helvetica','bold'); docPdf.setFontSize(12); docPdf.setTextColor(...azul);
     docPdf.text('Detalhamento por registro (próxima página)', margin, y);
 
@@ -1245,11 +1368,24 @@
       return yStart + rowH;
     }
 
+    function drawBlocoFaixa(yStart, blocoIdx) {
+      const rowH = 22;
+      docPdf.setFillColor(...amarelo);
+      docPdf.rect(margin, yStart, usableWidth, rowH, 'F');
+      docPdf.setDrawColor(...azulDeep);
+      docPdf.rect(margin, yStart, usableWidth, rowH, 'S');
+      docPdf.setFont('helvetica','bold'); docPdf.setFontSize(10); docPdf.setTextColor(...azulDeep);
+      const qtd = blocoContagem[blocoIdx];
+      docPdf.text(`${blocoLabels[blocoIdx]} — ${qtd} registro${qtd===1?'':'s'}`, margin+cellPad+2, yStart+rowH/2+3.5);
+      return yStart + rowH;
+    }
+
     docPdf.addPage();
     drawTopBar();
     let ty = drawTableHeader(66);
+    let blocoAtualDesenhado = -1;
 
-    dataRows.forEach((row, rIdx) => {
+    linhasRota.forEach(({row, bloco}, rIdx) => {
       docPdf.setFont('helvetica','normal'); docPdf.setFontSize(fontData);
       const efeitoVal = idxEfeito >= 0 ? String(row[idxEfeito] || '').trim() : '';
       const badge = badgeCores[chaveEfeito(efeitoVal)];
@@ -1260,11 +1396,18 @@
       });
       const maxLines = Math.max(1, ...linesPerCol.map(l => l.length));
       const rowH = Math.max(minRowH, maxLines*lineH + cellPad*2);
+      const precisaFaixa = bloco !== blocoAtualDesenhado;
+      const alturaExtra = precisaFaixa ? 22 : 0;
 
-      if (ty + rowH > pageH - 34) {
+      if (ty + alturaExtra + rowH > pageH - 34) {
         docPdf.addPage();
         drawTopBar();
         ty = drawTableHeader(66);
+      }
+
+      if (precisaFaixa) {
+        ty = drawBlocoFaixa(ty, bloco);
+        blocoAtualDesenhado = bloco;
       }
 
       docPdf.setFillColor(...(rIdx % 2 === 0 ? [255,255,255] : zebra));
