@@ -1339,6 +1339,12 @@
     // ---------- páginas da tabela ----------
     const usableWidth = pageW - margin*2;
     const fontData = 6.6, fontHeader = 6.8, lineH = 7.8, cellPad = 3.5, minRowH = 14, minColW = 30;
+    // Respiro extra reservado ENTRE colunas (além do cellPad de cada lado),
+    // para garantir uma folga visível de verdade entre o fim do texto de
+    // uma coluna e o começo da próxima — mesmo na linha com o valor mais
+    // comprido daquela coluna. Sem essa folga, texto de colunas vizinhas
+    // pode ficar praticamente colado (ex.: um NIS grudado no CPF ao lado).
+    const gutter = 4;
 
     // Largura-base ("peso") de cada coluna: usa o tamanho TÍPICO do
     // conteúdo (percentil 60 dos comprimentos, não o maior valor isolado),
@@ -1367,7 +1373,7 @@
           if (w > maior) maior = w;
         });
       });
-      return Math.max(minColW, maior + cellPad*2 + 1);
+      return Math.max(minColW, maior + cellPad*2 + gutter + 2);
     });
 
     // Reparte a largura disponível respeitando os mínimos acima: cada
@@ -1412,7 +1418,7 @@
 
     function drawTableHeader(yStart) {
       docPdf.setFont('helvetica','bold'); docPdf.setFontSize(fontHeader);
-      const linesPerCol = headers.map((h,i) => docPdf.splitTextToSize(String(h), colWidths[i]-cellPad*2));
+      const linesPerCol = headers.map((h,i) => docPdf.splitTextToSize(String(h), colWidths[i]-cellPad*2-gutter));
       const maxLines = Math.max(1, ...linesPerCol.map(l => l.length));
       const rowH = maxLines*lineH + cellPad*2;
       docPdf.setFillColor(...azulDeep);
@@ -1428,15 +1434,17 @@
     }
 
     function drawBlocoFaixa(yStart, blocoIdx) {
-      const rowH = 22;
+      const rowH = 27;
       docPdf.setFillColor(...amarelo);
       docPdf.rect(margin, yStart, usableWidth, rowH, 'F');
       docPdf.setDrawColor(...azulDeep);
+      docPdf.setLineWidth(1.1);
       docPdf.rect(margin, yStart, usableWidth, rowH, 'S');
-      docPdf.setFont('helvetica','bold'); docPdf.setFontSize(10); docPdf.setTextColor(...azulDeep);
+      docPdf.setLineWidth(0.4);
+      docPdf.setFont('helvetica','bold'); docPdf.setFontSize(11); docPdf.setTextColor(...azulDeep);
       const qtd = blocoContagem[blocoIdx];
-      docPdf.text(`${blocoLabels[blocoIdx]} — ${qtd} registro${qtd===1?'':'s'}`, margin+cellPad+2, yStart+rowH/2+3.5);
-      return yStart + rowH;
+      docPdf.text(`${blocoLabels[blocoIdx]} — ${qtd} registro${qtd===1?'':'s'}`, margin+cellPad+3, yStart+rowH/2+3.8);
+      return yStart + rowH + 6;
     }
 
     docPdf.addPage();
@@ -1451,14 +1459,21 @@
       const linesPerCol = headers.map((h,i) => {
         const bold = i === idxNome;
         docPdf.setFont('helvetica', bold ? 'bold' : 'normal');
-        return docPdf.splitTextToSize(String(row[i] ?? ''), colWidths[i]-cellPad*2);
+        return docPdf.splitTextToSize(String(row[i] ?? ''), colWidths[i]-cellPad*2-gutter);
       });
       const maxLines = Math.max(1, ...linesPerCol.map(l => l.length));
       const rowH = Math.max(minRowH, maxLines*lineH + cellPad*2);
       const precisaFaixa = bloco !== blocoAtualDesenhado;
-      const alturaExtra = precisaFaixa ? 22 : 0;
+      const primeiroBlocoDaTabela = blocoAtualDesenhado === -1;
 
-      if (ty + alturaExtra + rowH > pageH - 34) {
+      if (precisaFaixa && !primeiroBlocoDaTabela) {
+        // Bloco novo: sempre começa em página nova, para ficar claramente
+        // separado do bloco anterior (em vez de só uma faixa no meio da
+        // página).
+        docPdf.addPage();
+        drawTopBar();
+        ty = drawTableHeader(66);
+      } else if (ty + (precisaFaixa ? 33 : 0) + rowH > pageH - 34) {
         docPdf.addPage();
         drawTopBar();
         ty = drawTableHeader(66);
