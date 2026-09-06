@@ -1338,7 +1338,9 @@
 
     // ---------- páginas da tabela ----------
     const usableWidth = pageW - margin*2;
-    const fontData = 6.6, fontHeader = 6.8, lineH = 7.8, cellPad = 3.5, minRowH = 14, minColW = 30;
+    let fontData = 6.6, fontHeader = 6.8, lineH = 7.8;
+    const FONT_DATA_MIN = 5.0; // nunca deixa a fonte da tabela ficar menor que isso
+    const cellPad = 3.5, minRowH = 14, minColW = 26;
     // Respiro extra reservado ENTRE colunas (além do cellPad de cada lado),
     // para garantir uma folga visível de verdade entre o fim do texto de
     // uma coluna e o começo da próxima — mesmo na linha com o valor mais
@@ -1358,23 +1360,26 @@
       return Math.max(3, Math.min(mediana, 42));
     });
 
-    // Largura MÍNIMA de cada coluna: precisa caber a maior PALAVRA que
-    // aparece nos dados (medida de verdade, em negrito para dar folga),
-    // senão o jsPDF corta a palavra no meio de forma feia (ex.: "Bloquei"
-    // numa linha e "o" sozinho na linha de baixo). O cabeçalho pode quebrar
-    // em várias linhas à vontade, então ele não entra nesse cálculo.
-    docPdf.setFont('helvetica','bold'); docPdf.setFontSize(fontData);
-    const minWordWidths = headers.map((_, i) => {
-      let maior = 0;
-      dataRows.forEach(r => {
-        String(r[i] ?? '').split(/\s+/).forEach(palavra => {
-          if (!palavra) return;
-          const w = docPdf.getTextWidth(palavra);
-          if (w > maior) maior = w;
+    // Largura MÍNIMA de cada coluna no tamanho de fonte informado: precisa
+    // caber a maior PALAVRA que aparece nos dados (medida de verdade, em
+    // negrito para dar folga). Sem isso, o jsPDF não tem onde quebrar linha
+    // (a palavra não tem espaço no meio) e o texto acaba estourando por
+    // cima da coluna vizinha — foi exatamente o defeito visto no relatório
+    // (NIS colado no CPF, nome colado no endereço, etc.).
+    function calcularMinWordWidths(tamanhoFonte) {
+      docPdf.setFont('helvetica','bold'); docPdf.setFontSize(tamanhoFonte);
+      return headers.map((_, i) => {
+        let maior = 0;
+        dataRows.forEach(r => {
+          String(r[i] ?? '').split(/\s+/).forEach(palavra => {
+            if (!palavra) return;
+            const w = docPdf.getTextWidth(palavra);
+            if (w > maior) maior = w;
+          });
         });
+        return Math.max(minColW, maior + cellPad*2 + gutter + 2);
       });
-      return Math.max(minColW, maior + cellPad*2 + gutter + 2);
-    });
+    }
 
     // Reparte a largura disponível respeitando os mínimos acima: cada
     // coluna recebe pelo menos o necessário para não cortar palavra, e o
@@ -1403,22 +1408,48 @@
         }
       }
       for (let i=0;i<n;i++) if (!fixo[i]) resultado[i] = restante * (pesos[i]/pesoRestante);
-      // Se nem os mínimos couberem (planilha com colunas demais), encolhe
-      // tudo proporcionalmente como último recurso.
-      const soma = resultado.reduce((a,b)=>a+b,0);
-      if (soma > disponivel + 0.5) {
-        const fator = disponivel/soma;
-        return resultado.map(w => w*fator);
-      }
       return resultado;
     }
+
+    // Se a soma dos mínimos não couber na largura disponível (planilha com
+    // muitas colunas), a única forma segura de resolver é DIMINUIR A FONTE
+    // da tabela (o que reduz os mínimos junto) — nunca espremer as colunas
+    // abaixo do mínimo necessário, pois foi isso que causou o texto de uma
+    // coluna invadir a coluna vizinha no relatório anterior. Vai reduzindo
+    // em passos pequenos até caber, ou até bater no tamanho mínimo legível.
+    let minWordWidths = calcularMinWordWidths(fontData);
+    while (minWordWidths.reduce((a,b)=>a+b,0) > usableWidth && fontData > FONT_DATA_MIN) {
+      fontData = Math.max(FONT_DATA_MIN, +(fontData - 0.2).toFixed(2));
+      minWordWidths = calcularMinWordWidths(fontData);
+    }
+    // fonte do cabeçalho e altura de linha acompanham a redução, mantendo a
+    // mesma proporção que tinham no tamanho original
+    fontHeader = Math.max(fontData + 0.2, +(fontHeader - (6.6 - fontData)).toFixed(2));
+    lineH = Math.max(6.6, +(lineH - (6.6 - fontData)).toFixed(2));
 
     const colWidths = distribuirLargura(weights, minWordWidths, usableWidth);
     const colX = []; let acc = margin; colWidths.forEach(w => { colX.push(acc); acc += w; });
 
+    // Rede de segurança final: mesmo depois de diminuir a fonte, se ainda
+    // assim uma palavra isolada (sem espaço, ex. um NIS) for maior que a
+    // coluna (planilha com colunas em excesso), corta com reticências em
+    // vez de deixar o texto passar por cima da coluna ao lado.
+    function truncarLinha(texto, larguraMax) {
+      if (docPdf.getTextWidth(texto) <= larguraMax) return texto;
+      let low = 0, high = texto.length;
+      while (high - low > 1) {
+        const mid = Math.floor((low + high) / 2);
+        if (docPdf.getTextWidth(texto.slice(0, mid) + '…') <= larguraMax) low = mid; else high = mid;
+      }
+      return low > 0 ? texto.slice(0, low) + '…' : '…';
+    }
+
     function drawTableHeader(yStart) {
       docPdf.setFont('helvetica','bold'); docPdf.setFontSize(fontHeader);
-      const linesPerCol = headers.map((h,i) => docPdf.splitTextToSize(String(h), colWidths[i]-cellPad*2-gutter));
+      const linesPerCol = headers.map((h,i) => {
+        const larguraTexto = colWidths[i]-cellPad*2-gutter;
+        return docPdf.splitTextToSize(String(h), larguraTexto).map(l => truncarLinha(l, larguraTexto));
+      });
       const maxLines = Math.max(1, ...linesPerCol.map(l => l.length));
       const rowH = maxLines*lineH + cellPad*2;
       docPdf.setFillColor(...azulDeep);
@@ -1459,7 +1490,8 @@
       const linesPerCol = headers.map((h,i) => {
         const bold = i === idxNome;
         docPdf.setFont('helvetica', bold ? 'bold' : 'normal');
-        return docPdf.splitTextToSize(String(row[i] ?? ''), colWidths[i]-cellPad*2-gutter);
+        const larguraTexto = colWidths[i]-cellPad*2-gutter;
+        return docPdf.splitTextToSize(String(row[i] ?? ''), larguraTexto).map(l => truncarLinha(l, larguraTexto));
       });
       const maxLines = Math.max(1, ...linesPerCol.map(l => l.length));
       const rowH = Math.max(minRowH, maxLines*lineH + cellPad*2);
