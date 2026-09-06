@@ -1516,6 +1516,16 @@
         blocoAtualDesenhado = bloco;
       }
 
+      // drawTableHeader() e drawBlocoFaixa() (chamadas acima quando um
+      // bloco novo começa) mudam o tamanho da fonte do jsPDF (para o
+      // tamanho do cabeçalho e para 11pt, respectivamente) e não
+      // restauram — sem este reset, a PRIMEIRA linha de cada bloco era
+      // desenhada com uma fonte bem maior que a calculada, estourando o
+      // texto por cima das colunas vizinhas (o texto já tinha sido
+      // corretamente quebrado/dimensionado acima, usando fontData; só o
+      // desenho final que saía do tamanho certo).
+      docPdf.setFontSize(fontData);
+
       docPdf.setFillColor(...(rIdx % 2 === 0 ? [255,255,255] : zebra));
       docPdf.rect(margin, ty, usableWidth, rowH, 'F');
       if (badge && idxEfeito >= 0) {
@@ -2249,6 +2259,52 @@ if ('serviceWorker' in navigator) {
     window.location.reload();
   });
 }
+
+// Verificação extra de atualização (além do service worker acima).
+// O mecanismo do service worker só reage quando o PRÓPRIO arquivo sw.js
+// muda de conteúdo — se um dia eu editar só o index.html (o mais comum),
+// aquele mecanismo nem entra em ação. Este checador aqui é independente:
+// busca o index.html publicado direto da rede (ignorando qualquer cache)
+// de tempos em tempos e sempre que a aba volta a ficar visível; se o
+// conteúdo for diferente do que está rodando agora, recarrega a página
+// sozinho. Assim, qualquer atualização publicada — no sw.js, no
+// index.html, ou nos dois — chega automaticamente, sem precisar fechar a
+// aba nem apertar Ctrl+F5.
+(function () {
+  let htmlAtualRodando = null;
+  let verificando = false;
+
+  async function buscarHtmlPublicado() {
+    const resp = await fetch('./index.html', { cache: 'no-store' });
+    if (!resp.ok) throw new Error('falha ao buscar index.html');
+    return resp.text();
+  }
+
+  async function verificarAtualizacao() {
+    if (verificando) return;
+    verificando = true;
+    try {
+      const htmlPublicado = await buscarHtmlPublicado();
+      if (htmlAtualRodando === null) {
+        // primeira leitura: só define a "versão atual", não recarrega
+        htmlAtualRodando = htmlPublicado;
+      } else if (htmlPublicado !== htmlAtualRodando) {
+        window.location.reload();
+      }
+    } catch (e) {
+      // sem internet ou falha de rede passageira: ignora e tenta de novo
+      // na próxima verificação
+    } finally {
+      verificando = false;
+    }
+  }
+
+  verificarAtualizacao(); // define a versão atual assim que o app abre
+  setInterval(verificarAtualizacao, 3 * 60 * 1000); // repete a cada 3 min
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') verificarAtualizacao();
+  });
+})();
 </script>
 
 </div><!-- fim #appContent -->
