@@ -17,7 +17,7 @@
 // (trocou ícones, nomes de arquivo etc.), só mudar o número da versão
 // abaixo (v3 -> v4...). Para atualizações normais de conteúdo do
 // index.html isso NÃO é necessário.
-const CACHE_NAME = "pbf-app-shell-v5";
+const CACHE_NAME = "pbf-app-shell-v6";
 
 // Arquivos do próprio site.
 const SHELL_FILES = [
@@ -105,14 +105,16 @@ self.addEventListener("fetch", (event) => {
 
   const isPageRequest =
     isSameOrigin &&
-    (req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html"));
+    (req.mode === "navigate" ||
+      (req.headers.get("accept") || "").includes("text/html") ||
+      url.pathname.endsWith("/index.html"));
 
   if (isPageRequest) {
     // NETWORK-FIRST: sempre tenta buscar a página mais nova primeiro. Isso
     // é o que faz o app se atualizar sozinho quando você publica uma
     // mudança. Sem internet, cai para a cópia guardada.
     event.respondWith(
-      fetch(req)
+      fetch(req, { cache: "no-store" })
         .then((response) => {
           const copy = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
